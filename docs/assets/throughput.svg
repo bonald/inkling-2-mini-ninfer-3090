@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="354" viewBox="0 0 960 354" role="img" aria-labelledby="t d">
+<title id="t">Decode throughput on one RTX 3090</title>
+<desc id="d">Decode tokens per second: Inkling Q4 on a tuned llama.cpp build 97.44, Inkling Q4 on patched NInfer 125.94, Qwen3.8-27B on HyperQwen 130.20.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1628"/><stop offset="1" stop-color="#070b16"/></linearGradient>
+<linearGradient id="ink" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+<filter id="glow" x="-10%" y="-80%" width="120%" height="260%"><feGaussianBlur stdDeviation="7"/></filter>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="353" rx="16" fill="url(#bg)" stroke="#1e293b"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+<text x="32" y="48" font-size="20" font-weight="600" fill="#f1f5f9">Decode throughput on one RTX 3090</text>
+<text x="32" y="72" font-size="13" fill="#94a3b8">Eight warm sequential prompts, 1,024 tokens each. Same card, gateway and prompts.</text>
+<line x1="264" y1="94" x2="264" y2="270" stroke="#1e293b" stroke-width="1"/>
+<text x="264" y="290" font-size="11" fill="#64748b" text-anchor="middle">0</text>
+<line x1="384" y1="94" x2="384" y2="270" stroke="#1e293b" stroke-width="1"/>
+<text x="384" y="290" font-size="11" fill="#64748b" text-anchor="middle">35</text>
+<line x1="504" y1="94" x2="504" y2="270" stroke="#1e293b" stroke-width="1"/>
+<text x="504" y="290" font-size="11" fill="#64748b" text-anchor="middle">70</text>
+<line x1="624" y1="94" x2="624" y2="270" stroke="#1e293b" stroke-width="1"/>
+<text x="624" y="290" font-size="11" fill="#64748b" text-anchor="middle">105</text>
+<line x1="744" y1="94" x2="744" y2="270" stroke="#1e293b" stroke-width="1"/>
+<text x="744" y="290" font-size="11" fill="#64748b" text-anchor="middle">140</text>
+<text x="928" y="290" font-size="11" fill="#64748b" text-anchor="end">decode tokens/s</text>
+<text x="32" y="117" font-size="14" font-weight="600" fill="#e2e8f0">Inkling Q4</text>
+<text x="32" y="135" font-size="12" fill="#94a3b8">tuned llama.cpp build</text>
+<rect x="264" y="104" width="334.08" height="30" rx="7" fill="#334155"/>
+<text x="612.08" y="125" font-size="17" font-weight="600" fill="#cbd5e1">97.44</text>
+<text x="32" y="179" font-size="14" font-weight="700" fill="#e2e8f0">Inkling Q4</text>
+<text x="32" y="197" font-size="12" fill="#94a3b8">patched NInfer, this repository</text>
+<rect x="264" y="170" width="431.79" height="26" rx="7" fill="url(#ink)" opacity="0.55" filter="url(#glow)"/>
+<rect x="264" y="166" width="431.79" height="30" rx="7" fill="url(#ink)"/>
+<text x="709.79" y="187" font-size="17" font-weight="700" fill="#f8fafc">125.94</text>
+<rect x="781.79" y="169" width="72" height="24" rx="12" fill="#22d3ee" fill-opacity="0.12" stroke="#22d3ee" stroke-opacity="0.55"/>
+<text x="817.79" y="186" font-size="13" font-weight="700" fill="#67e8f9" text-anchor="middle">+29.2%</text>
+<text x="32" y="241" font-size="14" font-weight="600" fill="#e2e8f0">Qwen3.8-27B</text>
+<text x="32" y="259" font-size="12" fill="#94a3b8">HyperQwen reference</text>
+<rect x="264" y="228" width="446.4" height="30" rx="7" fill="#f59e0b" fill-opacity="0.16" stroke="#f59e0b" stroke-opacity="0.7"/>
+<text x="724.4" y="249" font-size="17" font-weight="600" fill="#fcd34d">130.20</text>
+<text x="32" y="326" font-size="13" fill="#94a3b8">Patched NInfer reaches <tspan fill="#67e8f9" font-weight="700">96.7%</tspan> of HyperQwen's decode rate and decodes <tspan fill="#67e8f9" font-weight="700">29.2% faster</tspan> than the tuned llama.cpp build.</text>
+</g>
+</svg>

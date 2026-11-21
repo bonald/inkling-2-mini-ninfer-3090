@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="340" viewBox="0 0 960 340" role="img" aria-labelledby="t d">
+<title id="t">Fidelity to vanilla Q4</title>
+<desc id="d">3,956 of 4,088 top-token predictions match vanilla Q4 (96.77%). 127 disagreements chose vanilla's runner-up and 5 chose its rank 3 to 5. Perplexity 9.25762 versus 9.23235. 92 of 95 fixed-prefix choices matched. Answers 12/12 greedy and 23/24 sampled versus 11/12 and 23/24. 3 of 6 free continuations identical, mean similarity 0.781.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1628"/><stop offset="1" stop-color="#070b16"/></linearGradient>
+<linearGradient id="ink" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+<clipPath id="barclip"><rect x="32" y="142" width="896" height="22" rx="4"/></clipPath>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="339" rx="16" fill="url(#bg)" stroke="#1e293b"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+<text x="32" y="48" font-size="20" font-weight="600" fill="#f1f5f9">Fidelity to vanilla Q4</text>
+<text x="32" y="72" font-size="13" fill="#94a3b8">Reference: the publisher's Q4 GGUF on unmodified llama.cpp. Eight 512-token WikiText-2 windows, all 200,058 logits scored.</text>
+<text x="32" y="124" font-size="36" font-weight="700" fill="url(#ink)">96.77%</text>
+<text x="172" y="106" font-size="14" font-weight="600" fill="#e2e8f0">identical top-token predictions</text>
+<text x="172" y="124" font-size="12.5" fill="#94a3b8">3,956 of 4,088 positions</text>
+<rect x="32" y="142" width="896" height="22" rx="4" fill="#1e293b"/>
+<g clip-path="url(#barclip)">
+<rect x="32" y="142" width="867.07" height="22" fill="url(#ink)"/>
+<rect x="899.07" y="142" width="27.84" height="22" fill="#e879f9"/>
+<rect x="926.9" y="142" width="1.1" height="22" fill="#f59e0b"/>
+</g>
+<rect x="32" y="180" width="10" height="10" rx="3" fill="url(#ink)"/>
+<text x="48" y="189" font-size="12.5" fill="#cbd5e1">Same top token <tspan fill="#94a3b8">3,956</tspan></text>
+<rect x="232" y="180" width="10" height="10" rx="3" fill="#e879f9"/>
+<text x="248" y="189" font-size="12.5" fill="#cbd5e1">Vanilla's runner-up <tspan fill="#94a3b8">127</tspan></text>
+<rect x="432" y="180" width="10" height="10" rx="3" fill="#f59e0b"/>
+<text x="448" y="189" font-size="12.5" fill="#cbd5e1">Vanilla's rank 3 to 5 <tspan fill="#94a3b8">5</tspan></text>
+<text x="928" y="189" font-size="12.5" fill="#94a3b8" text-anchor="end">All 132 disagreements stay in vanilla's top five</text>
+<rect x="32" y="214" width="212" height="102" rx="12" fill="#0f172a" stroke="#1e293b"/>
+<text x="50" y="240" font-size="11" font-weight="600" letter-spacing="1.2" fill="#94a3b8">PERPLEXITY</text>
+<text x="50" y="270" font-size="22" font-weight="700" fill="#f1f5f9">9.25762</text>
+<text x="50" y="290" font-size="12" fill="#94a3b8">vanilla Q4: 9.23235</text>
+<text x="50" y="306" font-size="12" fill="#64748b">same 4,088 positions</text>
+<rect x="260" y="214" width="212" height="102" rx="12" fill="#0f172a" stroke="#1e293b"/>
+<text x="278" y="240" font-size="11" font-weight="600" letter-spacing="1.2" fill="#94a3b8">FIXED PREFIXES</text>
+<text x="278" y="270" font-size="22" font-weight="700" fill="#f1f5f9">92 / 95</text>
+<text x="278" y="290" font-size="12" fill="#94a3b8">next-token choices matched</text>
+<text x="278" y="306" font-size="12" fill="#64748b">second prefix set</text>
+<rect x="488" y="214" width="212" height="102" rx="12" fill="#0f172a" stroke="#1e293b"/>
+<text x="506" y="240" font-size="11" font-weight="600" letter-spacing="1.2" fill="#94a3b8">CHECKABLE ANSWERS</text>
+<text x="506" y="270" font-size="22" font-weight="700" fill="#f1f5f9">12/12 · 23/24</text>
+<text x="506" y="290" font-size="12" fill="#94a3b8">greedy · sampled</text>
+<text x="506" y="306" font-size="12" fill="#64748b">vanilla: 11/12 · 23/24</text>
+<rect x="716" y="214" width="212" height="102" rx="12" fill="#0f172a" stroke="#1e293b"/>
+<text x="734" y="240" font-size="11" font-weight="600" letter-spacing="1.2" fill="#94a3b8">FREE CONTINUATIONS</text>
+<text x="734" y="270" font-size="22" font-weight="700" fill="#f1f5f9">3 / 6 identical</text>
+<text x="734" y="290" font-size="12" fill="#94a3b8">mean similarity 0.781</text>
+<text x="734" y="306" font-size="12" fill="#64748b">greedy, up to 80 tokens</text>
+</g>
+</svg>
