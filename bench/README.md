@@ -15,7 +15,7 @@ Decode tokens/s is the reciprocal of the arithmetic mean of the eight request-le
 
 ## Answer and token comparisons
 
-Use the published CUDA 13 llama.cpp build and original Q4 GGUF as the reference. The full-vocabulary instructions below give the archive and its digest. With the optimized service stopped, launch the publisher's `llama-server` from its release directory. Use `--alias vanilla-q4 -m /path/to/models/Inkling-2-Mini-UD-IQ4_XS.gguf -ngl 99 -c 65536 -np 1 --port 8081` and leave speculation disabled. Run the reference capture. Then stop the reference, start the optimized server on port 8080 on the same GPU, and run the candidate capture and comparison. The candidate reuses the literal token prefixes from the reference JSON.
+Use the published CUDA 13 llama.cpp build and original Q4 GGUF as the reference. The full-vocabulary instructions below give the archive and its digest. With the optimized service stopped, launch the publisher's `llama-server` from its release directory. Use `--alias vanilla-q4 -m /path/to/models/Inkling-2-Mini-UD-IQ4_XS.gguf -ngl 99 -c 65536 -np 1 --spec-type none --port 8081`. Run the reference capture. Then stop the reference, start the optimized server on port 8080 on the same GPU, and run the candidate capture and comparison. The candidate reuses the literal token prefixes from the reference JSON.
 
 ```sh
 mkdir -p results
@@ -41,3 +41,7 @@ python3 bench/compare-reasoning.py capture http://127.0.0.1:8081 vanilla-q4 > re
 python3 bench/compare-reasoning.py capture http://127.0.0.1:8080 inkling-2-mini-q4 > results/reasoning-optimized.jsonl
 python3 bench/compare-reasoning.py compare results/reasoning-vanilla.jsonl results/reasoning-optimized.jsonl
 ```
+
+## Package verification
+
+On 2026-11-21, a fresh download and Docker conversion reproduced the accepted Q4 tensor payload, model metadata and DSpark output-projection digests. An offline repeat verified the installed files. The standalone serving image compiled both executables for SM86 with CUDA 13.0.88. The packaged server reported `2026-11-21.2+395ce8b85627-inkling-8d14db6e83d6` and reached GPU initialization on the CPU-only build host. The RTX 3090 speed and quality measurements are from the earlier deployment of this patch.
