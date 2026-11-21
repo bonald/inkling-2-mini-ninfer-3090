@@ -32,7 +32,7 @@ For downloads alone, run `python3 scripts/download-model.py models` on Linux or 
 
 ## Measured results
 
-Eight warm, sequential prompts generated 1,024 tokens each on the same RTX 3090. These are single-run gateway measurements of the source configuration packaged here. Independent repeat-run uncertainty was not measured.
+Eight warm, sequential prompts generated 1,024 tokens each on the same RTX 3090. These are single-run gateway measurements of the source configuration packaged here. On this run, patched NInfer decoded 29.2% faster than the preceding Inkling build and reached 96.7% of HyperQwen's decode rate.
 
 | Engine | Decode tokens/s | End-to-end tokens/s |
 | --- | ---: | ---: |
@@ -42,8 +42,8 @@ Eight warm, sequential prompts generated 1,024 tokens each on the same RTX 3090.
 
 The quality reference used the publisher's original Q4 GGUF and unmodified CUDA llama.cpp with speculative decoding disabled. Eight disjoint 512-token WikiText-2 windows gave **3,956/4,088 identical top-token predictions (96.77%)**, scoring all 200,058 token logits at each position. Of the 132 disagreements, 127 selected vanilla Q4's runner-up and all 132 selected a top-five token. Perplexity was **9.25762** versus **9.23235** for vanilla Q4.
 
-With free generation, three of six greedy 80-token continuations matched exactly. On 12 checkable questions, optimized Q4 scored **12/12 greedy and 23/24 sampled**, versus **11/12 and 23/24** for vanilla Q4 at the same 768-token budget. These tests measure token and answer fidelity on the stated samples. [Reproduce the benchmarks](bench/README.md)
+On a second set of 95 fixed prefixes, 92 next-token choices matched. When each engine generated freely for up to 80 tokens, three of six greedy continuations were identical. Mean token-sequence similarity across the six was **0.781** (Python's `SequenceMatcher` ratio). On 12 checkable questions, optimized Q4 scored **12/12 greedy and 23/24 sampled**, versus **11/12 and 23/24** for vanilla Q4 at the same 768-token budget. These tests measure token and answer fidelity on the stated samples. [Reproduce the benchmarks](bench/README.md)
 
 ## Credits and license
 
-Thinking Machines Lab created Inkling and DSpark. Unsloth published the GGUFs. The runtime is iamwavecut's NInfer-all and its upstream contributors' work. This repository provides the RTX 3090 patch, preparation scripts and evaluations under Apache-2.0. Model and dependency licenses are listed separately. [Credits and third-party terms](licenses/README.md) · [License](LICENSE)
+Thinking Machines Lab created Inkling and DSpark. Unsloth published the GGUFs. The runtime is iamwavecut's NInfer-all and its upstream contributors' work. The RTX 3090 patch, preparation scripts and evaluations were developed with OpenAI Codex and are licensed under Apache-2.0. Model and dependency licenses are listed separately. [Credits and third-party terms](licenses/README.md) · [License](LICENSE)

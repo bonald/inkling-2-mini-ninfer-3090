@@ -27,3 +27,17 @@ python3 bench/compare-quality.py compare results/vanilla.json results/optimized.
 This harness covers 95 fixed contexts, six free continuations of up to 80 tokens, and 12 checkable questions under greedy and two seeded sampling conditions. The separate full-vocabulary comparison uses WikiText-2 and evaluates 4,088 positions. [Full-vocabulary scoring](quality/README.md)
 
 To repeat the near-limit retrieval timing on the optimized server, run `python3 scripts/check-context.py`. It checks the configured context size, submitted and generated token counts, and the answer to a question about the beginning of the prompt.
+
+To test idle unloading on the running service, run `python3 bench/check-idle.py` while the endpoint has no other traffic. It times the unload and sends a second completion to verify reloading.
+
+The standalone idle-policy check used the pinned single-model NInfer registry with an in-memory test model. With status polling active, it unloaded at 600.3 seconds and loaded again on the next request. This measured the registry timer and reload behavior. The GPU throughput figures above come from the original RTX 3090 deployment.
+
+## Additional reasoning evaluation
+
+`compare-reasoning.py` selects 32 GSM8K and 32 ARC-Challenge test rows by a fixed hash. It downloads each pinned test split and checks its SHA-256. Install `pyarrow` for capture. The original evaluation completed the vanilla side only, so the README reports no paired score for these datasets. [Dataset credits](../licenses/README.md)
+
+```sh
+python3 bench/compare-reasoning.py capture http://127.0.0.1:8081 vanilla-q4 > results/reasoning-vanilla.jsonl
+python3 bench/compare-reasoning.py capture http://127.0.0.1:8080 inkling-2-mini-q4 > results/reasoning-optimized.jsonl
+python3 bench/compare-reasoning.py compare results/reasoning-vanilla.jsonl results/reasoning-optimized.jsonl
+```

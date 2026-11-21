@@ -49,6 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libcurl4t64 zli
 COPY --from=build /build/apps/ninfer-serve /build/apps/ninfer-perplexity /usr/local/bin/
 COPY --from=notices /notices/ /usr/share/doc/inkling/
 COPY scripts/serve.sh /usr/local/bin/serve-inkling
-RUN ninfer-serve --version && ninfer-perplexity --help >/dev/null
+# An image build can run on a host without an attached NVIDIA driver.
+RUN export LD_LIBRARY_PATH="/usr/local/cuda/compat:${LD_LIBRARY_PATH}" \
+ && ninfer-serve --version && ninfer-perplexity --help >/dev/null
 EXPOSE 8080
 ENTRYPOINT ["bash", "/usr/local/bin/serve-inkling"]
