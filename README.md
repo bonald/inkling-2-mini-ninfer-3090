@@ -35,6 +35,16 @@ A standalone, single-GPU build of NInfer for Unsloth's **Inkling 2 Mini UD-IQ4_X
   <img src="docs/assets/at-a-glance.svg" alt="At a glance: 125.94 decode tokens/s, 29.2% over tuned llama.cpp; 96.7% of HyperQwen's 130.20 tokens/s; 96.77% top-token agreement with vanilla Q4; 65,536-token context with text and images" width="100%">
 </p>
 
+## See it run
+
+<p align="center">
+  <a href="tests/inkling-2-mini-3090.mp4"><img src="docs/assets/demo.webp" alt="Real-time clip: Inkling 2 Mini streams a Python LRU cache implementation on an RTX 3090 while a dashboard shows decode speed and GPU load" width="100%"></a>
+</p>
+
+One coding request on the RTX 3090, recorded in real time. Inkling reasons through a thread-safe O(1) LRU cache, then writes the implementation and a pytest suite. The clip above is 12 seconds of the answer. [Watch the full 4.5-minute recording](tests/inkling-2-mini-3090.mp4)
+
+The [generated code](tests/README.md) is in `tests/`. All 44 of its tests pass, and `mypy --strict` reports no issues.
+
 ## Quick start
 
 | Requirement | Details |
@@ -183,7 +193,8 @@ These tests measure token and answer fidelity on the stated samples. [Full-vocab
 ├── patches/          RTX 3090 changes to NInfer-all 395ce8b
 ├── scripts/          Download, convert, verify, serve and smoke-test
 ├── bench/            Throughput, fidelity, reasoning and idle-unload harnesses
-├── docs/assets/      README graphics
+├── tests/            Demo recording and the code Inkling generated in it
+├── docs/assets/      README graphics and demo clip
 └── licenses/         Third-party notices
 ```
 

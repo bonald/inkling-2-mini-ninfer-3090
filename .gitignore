@@ -5,3 +5,5 @@ __pycache__/
 .env
 .DS_Store
 /results-inkling.*/
+.pytest_cache/
+.mypy_cache/
