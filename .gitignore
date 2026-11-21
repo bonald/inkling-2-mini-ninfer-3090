@@ -1,0 +1,7 @@
+/models/
+/results/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+/results-inkling.*/

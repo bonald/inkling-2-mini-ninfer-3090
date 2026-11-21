@@ -1,0 +1,15 @@
+**
+!Dockerfile
+!LICENSE
+!NOTICE
+!licenses/
+!licenses/**
+!scripts/
+!scripts/**
+!patches/
+!patches/**
+!bench/
+!bench/quality/
+!bench/quality/capture-logits.patch
+**/__pycache__/
+**/*.pyc

@@ -1,0 +1,31 @@
+Inkling 2 Mini on the RTX 3090
+Maintained by Rafael Kupper. Local CUDA, sampling, model-preparation and
+evaluation changes were developed with OpenAI Codex.
+
+The engine patch modifies NInfer-all by iamwavecut and contributors,
+derived from Neroued/ninfer and the Don-Chad and ashalliants NInfer-3090 forks.
+Upstream revision: 395ce8b85627bcb2d53a1a81623088eab755443c (Apache-2.0).
+Upstream authors and lineage:
+https://github.com/iamwavecut/ninfer-all/blob/395ce8b85627bcb2d53a1a81623088eab755443c/CONTRIBUTORS.md
+The two patch files identify the modified and added source files.
+
+Thinking Machines Lab provides Inkling 2 Mini, DSpark and the tokenizer.
+Unsloth provides the GGUF quantization, vision projector and drafter GGUF.
+Those model repositories declare Apache-2.0. We convert the Q4 target and
+projector into NInfer format and quantize the drafter's projections for serving.
+Model weights are downloaded by the operator.
+https://huggingface.co/thinkingmachines/Inkling-2-Mini
+https://huggingface.co/unsloth/Inkling-2-Mini-GGUF
+
+The GGUF conversion tooling comes from llama.cpp, GGML and the Unsloth
+llama.cpp fork. The GGML quantization code and gguf-py have their own MIT
+notices under licenses/. WikiText-2 is by Stephen Merity, Caiming Xiong,
+James Bradbury and Richard Socher, from English Wikipedia (the WikiText card lists CC BY-SA 3.0 and GFDL).
+The eight timing prompts are from syv-ai/HyperQwen (Apache-2.0).
+The repository provides scoring code and aggregate measurements.
+
+The container build uses NVIDIA CUDA under NVIDIA's terms. NInfer uses
+FFmpeg (LGPL-2.1-or-later), dav1d (BSD-2-Clause) and other third-party
+components. The runtime image includes corresponding engine and media
+source, build instructions, upstream notices and licenses under
+/usr/share/doc/inkling. The Git repository distributes source and recipes.

@@ -1,0 +1,46 @@
+--- a/src/runtime/engine/inkling2_core.cpp
++++ b/src/runtime/engine/inkling2_core.cpp
+@@ -36,6 +36,8 @@
+ #include <cuda_bf16.h>
+ 
+ #include <algorithm>
++#include <cstdlib>
++#include <fstream>
+ #include <atomic>
+ #include <cmath>
+ #include <condition_variable>
+@@ -2735,6 +2737,12 @@
+             window.size() > max_context) {
+             throw std::invalid_argument("score: invalid token window");
+         }
++        const char* prefix = std::getenv("INKLING_SCORE_DUMP");
++        if (prefix) {
++            std::ofstream ids(std::string(prefix) + ".ids", std::ios::binary | std::ios::app);
++            ids.write(reinterpret_cast<const char*>(window.data()), window.size() * sizeof(TokenId));
++            if (!ids) throw std::runtime_error("could not write score window token IDs");
++        }
+         // Inkling reads a sequence as it is: its prompts open with no <bos>.
+         const std::vector<TokenId>& tokens = window;
+         const std::uint32_t first_target   = window_target;
+@@ -2767,6 +2775,21 @@
+             const Tensor logits(static_cast<__nv_bfloat16*>(all.data) +
+                                     std::size_t(first_row) * all.ne[0],
+                                 DType::BF16, {all.ne[0], static_cast<std::int32_t>(rows)});
++            if (prefix) {
++                std::ofstream file(std::string(prefix) + ".bf16", std::ios::binary | std::ios::app);
++                if (file.tellp() == 0) file.write(reinterpret_cast<const char*>(&domain), 4);
++                const auto stride = static_cast<std::size_t>(all.ne[0]);
++                std::vector<std::uint16_t> host_logits(rows * stride);
++                CUDA_CHECK(cudaMemcpyAsync(host_logits.data(), logits.data, host_logits.size() * 2,
++                                           cudaMemcpyDeviceToHost, stream));
++                CUDA_CHECK(ninfer::wait_for_stream(stream));
++                for (std::uint32_t i = 0; i < rows; ++i) {
++                    file.write(reinterpret_cast<const char*>(&targets[i]), 4);
++                    file.write(reinterpret_cast<const char*>(host_logits.data() + i * stride),
++                               std::size_t(domain) * 2);
++                }
++                if (!file) throw std::runtime_error("could not write target logits");
++            }
+             const Tensor target_ids(score_targets.p, DType::I32, {static_cast<std::int32_t>(rows)});
+             Tensor result(score_out.p, DType::FP32, {static_cast<std::int32_t>(rows)});
+             ops::target_logprobs(logits, target_ids, static_cast<std::int32_t>(domain), result,

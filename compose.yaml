@@ -1,0 +1,32 @@
+services:
+  prepare:
+    profiles: [setup]
+    platform: linux/amd64
+    build:
+      context: .
+      target: prepare
+    volumes:
+      - ${INKLING_MODEL_DIR:-./models}:/models
+  inkling:
+    platform: linux/amd64
+    build:
+      context: .
+      target: runtime
+      args:
+        BUILD_JOBS: ${BUILD_JOBS:-6}
+    ports:
+      - "127.0.0.1:${INKLING_PORT:-8080}:8080"
+    volumes:
+      - ${INKLING_MODEL_DIR:-./models}:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${INKLING_GPU:-0}"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/v1/models"]
+      interval: 30s
+      timeout: 5s
+      start_period: 2m
