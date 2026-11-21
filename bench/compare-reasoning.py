@@ -40,7 +40,7 @@ def questions(suite):
         blob = stream.read()
     if hashlib.sha256(blob).hexdigest() != sha256:
         raise ValueError(f"{repo} test split checksum mismatch")
-    records = pq.read_table(io.BytesIO(blob)).to_pylist()
+    records = pq.ParquetFile(io.BytesIO(blob)).read(use_threads=False).to_pylist()
     def rank(i):
         return hashlib.sha256(f"Inkling-Q4-comparison-v1/{suite}/{i}".encode()).digest()
     for i in sorted(range(len(records)), key=rank)[:32]:
