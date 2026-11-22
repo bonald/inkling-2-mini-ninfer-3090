@@ -90,13 +90,28 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
          loop_words.insert(loop_words.end(), semantic.loop_round.begin(), semantic.loop_round.end());
          semantic.loop_round.clear();
          if (loop_words.size() > 2 * kLoopHistoryWords) {
-@@ -1041,6 +1045,18 @@
+@@ -880,7 +884,13 @@
+         // A token that confirms a held close (its first byte is a line break, or it ends the
+         // turn) is the first one after the thinking, so neither count includes it.
+         const bool presentation_held = holds_presentation_close(impl_->preview_state);
+-        if (impl_->preview_state.in_reasoning) { ++impl_->preview_state.reasoning_tokens; }
++        if (impl_->preview_state.in_reasoning) {
++            ++impl_->preview_state.reasoning_tokens;
++            if (impl_->inkling && token != impl_->inkling->end && token != impl_->inkling->header &&
++                !impl_->inkling->content(token)) {
++                ++impl_->preview_semantic.model_thinking_tokens;
++            }
++        }
+         SemanticThinkingState& thinking = impl_->preview_semantic;
+         // DeepSeek's </think> token closes its reasoning whatever follows it; a line break after
+         // it is what closes the channel for the scans, and the content's leading break is dropped.
+@@ -1041,25 +1051,58 @@
          impl_->preview_semantic.control_pending = true;
          return complete(count, FinishReason::None, runtime::ContinuationAction::ApplyTargetControl);
      }
 +    if (impl_->inkling && impl_->early_close_available && impl_->preview_state.in_reasoning &&
 +        !impl_->preview_semantic.applied && impl_->preview_semantic.budget &&
-+        impl_->preview_state.reasoning_tokens >= *impl_->preview_semantic.budget) {
++        impl_->preview_semantic.model_thinking_tokens >= *impl_->preview_semantic.budget) {
 +        const std::uint64_t control =
 +            impl_->thinking_control_tokens ? impl_->thinking_control_tokens->size() : 0U;
 +        const std::uint64_t remaining = total_budget_remaining - count;
@@ -109,7 +124,18 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
      // Reasoning-loop guard: once per kLoopCheckTokens thinking tokens, at the end of a round. Gemma
      // and Flint count the tokens of the reasoning they opened; they have no early-close control,
      // so they stop. A held close marker defers the check to the next round, which resolves it.
-@@ -1054,12 +1070,31 @@
+     SemanticThinkingState& semantic     = impl_->preview_semantic;
+-    const std::uint32_t thinking_tokens = impl_->model_opens_reasoning()
+-                                              ? impl_->preview_state.reasoning_tokens
+-                                              : semantic.model_thinking_tokens;
++    const std::uint32_t thinking_tokens = impl_->inkling
++                                              ? semantic.model_thinking_tokens
++                                              : impl_->model_opens_reasoning()
++                                                    ? impl_->preview_state.reasoning_tokens
++                                                    : semantic.model_thinking_tokens;
+     if (semantic.loop != ReasoningLoopAction::Off &&
+         impl_->loop_reasoning(impl_->preview_state, semantic) && !semantic.applied &&
+         !semantic.loop_detected && !holds_semantic_close(semantic) &&
          thinking_tokens >= semantic.loop_next_check) {
          semantic.loop_next_check = (thinking_tokens / kLoopCheckTokens + 1U) * kLoopCheckTokens;
          // Strata reads a periodic tail as full coverage before its word measure; a tail that is
@@ -147,7 +173,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
              semantic.loop_detected        = true;
              semantic.loop_thinking_tokens = thinking_tokens;
              semantic.loop_coverage        = static_cast<float>(coverage);
-@@ -1086,10 +1121,17 @@
+@@ -1086,10 +1129,17 @@
  OutputSession::model_token_budget_remaining(std::uint32_t total_budget_remaining) const noexcept {
      // A pending control span (a reached budget's or the loop guard's) licenses no model token.
      if (impl_ != nullptr && impl_->semantic.control_pending) { return 0; }
@@ -159,15 +185,15 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
      }
 +    if (impl_->inkling) {
 +        if (!impl_->state.in_reasoning) { return total_budget_remaining; }
-+        if (impl_->state.reasoning_tokens >= *impl_->semantic.budget) { return 0; }
++        if (impl_->semantic.model_thinking_tokens >= *impl_->semantic.budget) { return 0; }
 +        return std::min(total_budget_remaining,
-+                        *impl_->semantic.budget - impl_->state.reasoning_tokens);
++                        *impl_->semantic.budget - impl_->semantic.model_thinking_tokens);
 +    }
 +    if (!impl_->semantic.in_reasoning) { return total_budget_remaining; }
      if (impl_->semantic.control_pending ||
          impl_->semantic.model_thinking_tokens >= *impl_->semantic.budget) {
          return 0;
-@@ -1110,7 +1152,9 @@
+@@ -1110,7 +1160,9 @@
          impl_->semantic.applied) {
          return 0;
      }
@@ -178,7 +204,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
                 ? static_cast<std::uint32_t>(impl_->thinking_control_tokens->size())
                 : 0U;
  }
-@@ -1143,6 +1187,17 @@
+@@ -1143,6 +1195,17 @@
              impl_->preview_execution_split_after = static_cast<std::uint32_t>(index + 1U);
          }
          if (impl_->preview_state.in_reasoning) { ++impl_->preview_state.reasoning_tokens; }
@@ -196,7 +222,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
          // DeepSeek's </think> token closes its reasoning whatever follows it, as in its own output.
          const bool deepseek_close = impl_->deepseek && token == impl_->deepseek->think_close;
          const std::string_view thinking_bytes =
-@@ -1160,7 +1215,7 @@
+@@ -1160,7 +1223,7 @@
      if (impl_->preview_semantic.in_reasoning) {
          throw std::logic_error("canonical thinking control did not close the thinking phase");
      }
@@ -205,7 +231,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
          throw std::logic_error("canonical thinking control did not close the reasoning channel");
      }
      impl_->preview_semantic.control_pending = false;
-@@ -1297,7 +1352,21 @@
+@@ -1297,7 +1360,20 @@
  }
  
  bool OutputSession::reasoning_closed() const noexcept {
@@ -220,24 +246,22 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
 +
 +std::optional<TokenId> OutputSession::banned_token() const noexcept {
 +    if (impl_ == nullptr || !impl_->inkling || !impl_->semantic.applied) { return std::nullopt; }
-+    if (impl_->state.inkling_block == fi::InklingBlock::None ||
-+        impl_->state.inkling_block == fi::InklingBlock::Header) {
-+        return impl_->inkling->thinking;
-+    }
-+    return std::nullopt;
++    // Keep <|content_thinking|> banned (and speculation disabled) for the remainder of an
++    // early-closed response so a multi-token speculative span cannot close a text/tool block,
++    // traverse a header, and re-open thinking unmasked.
++    return impl_->inkling->thinking;
  }
  
  ThinkingBudgetStats OutputSession::thinking_stats() const noexcept {
-@@ -1306,7 +1375,8 @@
+@@ -1305,7 +1381,7 @@
+     return ThinkingBudgetStats{
          .requested_budget = impl_->requested_budget,
          // Without early close the cap is never enforced, so there is no effective budget.
-         .effective_budget = impl_->early_close_available ? impl_->semantic.budget : std::nullopt,
--        .model_thinking_tokens = impl_->semantic.model_thinking_tokens,
-+        .model_thinking_tokens =
-+            impl_->inkling ? impl_->state.reasoning_tokens : impl_->semantic.model_thinking_tokens,
+-        .effective_budget = impl_->early_close_available ? impl_->semantic.budget : std::nullopt,
++        .effective_budget      = impl_->early_close_available ? impl_->semantic.budget : std::nullopt,
+         .model_thinking_tokens = impl_->semantic.model_thinking_tokens,
          .injected_tokens       = impl_->semantic.injected_tokens,
          .applied               = impl_->semantic.applied,
-         .loop_detected         = impl_->semantic.loop_detected,
 diff --git a/src/models/qwen3_5/frontend/output_session.h b/src/models/qwen3_5/frontend/output_session.h
 --- a/src/models/qwen3_5/frontend/output_session.h
 +++ b/src/models/qwen3_5/frontend/output_session.h
