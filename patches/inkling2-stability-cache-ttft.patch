@@ -105,23 +105,30 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
          SemanticThinkingState& thinking = impl_->preview_semantic;
          // DeepSeek's </think> token closes its reasoning whatever follows it; a line break after
          // it is what closes the channel for the scans, and the content's leading break is dropped.
-@@ -1041,25 +1051,58 @@
-         impl_->preview_semantic.control_pending = true;
-         return complete(count, FinishReason::None, runtime::ContinuationAction::ApplyTargetControl);
-     }
-+    if (impl_->inkling && impl_->early_close_available && impl_->preview_state.in_reasoning &&
-+        !impl_->preview_semantic.applied && impl_->preview_semantic.budget &&
-+        impl_->preview_semantic.model_thinking_tokens >= *impl_->preview_semantic.budget) {
-+        const std::uint64_t control =
-+            impl_->thinking_control_tokens ? impl_->thinking_control_tokens->size() : 0U;
-+        const std::uint64_t remaining = total_budget_remaining - count;
-+        if (control > 0 && remaining >= control + 1U) {
-+            impl_->preview_semantic.control_pending = true;
-+            return complete(count, FinishReason::None,
-+                            runtime::ContinuationAction::ApplyTargetControl);
+@@ -1018,6 +1028,22 @@
+         }
+         count_fed_token(impl_->preview_state);
+         release_logprobs(impl_->preview_state, impl_->preview_logprobs);
++        // Enforce Inkling's thinking budget per token so a speculative span starting outside
++        // reasoning (e.g. in a header) cannot cross <|content_thinking|>, exceed the budget, or
++        // open and close an entire thinking block within one round.
++        if (impl_->inkling && impl_->early_close_available && impl_->preview_state.in_reasoning &&
++            !impl_->preview_semantic.applied && impl_->preview_semantic.budget &&
++            impl_->preview_semantic.model_thinking_tokens >= *impl_->preview_semantic.budget) {
++            const std::uint64_t control =
++                impl_->thinking_control_tokens ? impl_->thinking_control_tokens->size() : 0U;
++            const std::uint64_t remaining = total_budget_remaining - count;
++            if (control > 0 && remaining >= control + 1U) {
++                note_stop_hold(false);
++                impl_->preview_semantic.control_pending = true;
++                return complete(count, FinishReason::None,
++                                runtime::ContinuationAction::ApplyTargetControl);
++            }
 +        }
-+    }
-     // Reasoning-loop guard: once per kLoopCheckTokens thinking tokens, at the end of a round. Gemma
+     }
+     note_stop_hold(false);
+ 
+@@ -1045,21 +1071,42 @@
      // and Flint count the tokens of the reasoning they opened; they have no early-close control,
      // so they stop. A held close marker defers the check to the next round, which resolves it.
      SemanticThinkingState& semantic     = impl_->preview_semantic;
@@ -173,7 +180,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
              semantic.loop_detected        = true;
              semantic.loop_thinking_tokens = thinking_tokens;
              semantic.loop_coverage        = static_cast<float>(coverage);
-@@ -1086,10 +1129,17 @@
+@@ -1086,10 +1133,17 @@
  OutputSession::model_token_budget_remaining(std::uint32_t total_budget_remaining) const noexcept {
      // A pending control span (a reached budget's or the loop guard's) licenses no model token.
      if (impl_ != nullptr && impl_->semantic.control_pending) { return 0; }
@@ -193,7 +200,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
      if (impl_->semantic.control_pending ||
          impl_->semantic.model_thinking_tokens >= *impl_->semantic.budget) {
          return 0;
-@@ -1110,7 +1160,9 @@
+@@ -1110,7 +1164,9 @@
          impl_->semantic.applied) {
          return 0;
      }
@@ -204,7 +211,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
                 ? static_cast<std::uint32_t>(impl_->thinking_control_tokens->size())
                 : 0U;
  }
-@@ -1143,6 +1195,17 @@
+@@ -1143,6 +1199,17 @@
              impl_->preview_execution_split_after = static_cast<std::uint32_t>(index + 1U);
          }
          if (impl_->preview_state.in_reasoning) { ++impl_->preview_state.reasoning_tokens; }
@@ -222,7 +229,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
          // DeepSeek's </think> token closes its reasoning whatever follows it, as in its own output.
          const bool deepseek_close = impl_->deepseek && token == impl_->deepseek->think_close;
          const std::string_view thinking_bytes =
-@@ -1160,7 +1223,7 @@
+@@ -1160,7 +1227,7 @@
      if (impl_->preview_semantic.in_reasoning) {
          throw std::logic_error("canonical thinking control did not close the thinking phase");
      }
@@ -231,7 +238,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
          throw std::logic_error("canonical thinking control did not close the reasoning channel");
      }
      impl_->preview_semantic.control_pending = false;
-@@ -1297,7 +1360,20 @@
+@@ -1297,7 +1364,20 @@
  }
  
  bool OutputSession::reasoning_closed() const noexcept {
@@ -253,7 +260,7 @@ diff --git a/src/models/qwen3_5/frontend/output_session.cpp b/src/models/qwen3_5
  }
  
  ThinkingBudgetStats OutputSession::thinking_stats() const noexcept {
-@@ -1305,7 +1381,7 @@
+@@ -1305,7 +1385,7 @@
      return ThinkingBudgetStats{
          .requested_budget = impl_->requested_budget,
          // Without early close the cap is never enforced, so there is no effective budget.
