@@ -1,0 +1,153 @@
+{
+  "timestamp": "2026-11-24T00:27:32",
+  "long_ab": {
+    "ctl_a": {
+      "name": "ctl-w2a",
+      "tag": "qual-ctla",
+      "startup_s": 32.6,
+      "vram_gib": 21.16,
+      "short_greedy_toks": 119.97,
+      "short_greedy_ct": 512,
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 26.89,
+        "prefill_toks": 1460.6,
+        "decode_toks": 88.18,
+        "completion_tokens": 256,
+        "retrieval": "3/3",
+        "codes": [
+          "SJTNHC4N",
+          "I6U32XNZ",
+          "CRROEGFA"
+        ]
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 63.89,
+        "prefill_toks": 1176.9,
+        "decode_toks": 68.28,
+        "completion_tokens": 256,
+        "retrieval": "3/3",
+        "codes": [
+          "00N7RIOD",
+          "NUNQZB7J",
+          "VZ5A058N"
+        ]
+      }
+    },
+    "best": {
+      "name": "k123-d4-v32k",
+      "tag": "qual-best",
+      "startup_s": 32.1,
+      "vram_gib": 20.88,
+      "short_greedy_toks": 140.83,
+      "short_greedy_ct": 512,
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 25.08,
+        "prefill_toks": 1566.5,
+        "decode_toks": 103.25,
+        "completion_tokens": 256,
+        "retrieval": "3/3",
+        "codes": [
+          "SJTNHC4N",
+          "I6U32XNZ",
+          "CRROEGFA"
+        ]
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 62.41,
+        "prefill_toks": 1204.8,
+        "decode_toks": 74.83,
+        "completion_tokens": 256,
+        "retrieval": "3/3",
+        "codes": [
+          "00N7RIOD",
+          "NUNQZB7J",
+          "VZ5A058N"
+        ]
+      }
+    },
+    "ctl_b": {
+      "name": "ctl-w2b",
+      "tag": "qual-ctlb",
+      "startup_s": 32.1,
+      "vram_gib": 21.16,
+      "short_greedy_toks": 124.93,
+      "short_greedy_ct": 512,
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 24.95,
+        "prefill_toks": 1574.2,
+        "decode_toks": 88.79,
+        "completion_tokens": 256,
+        "retrieval": "3/3",
+        "codes": [
+          "SJTNHC4N",
+          "I6U32XNZ",
+          "CRROEGFA"
+        ]
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 63.56,
+        "prefill_toks": 1183.0,
+        "decode_toks": 63.69,
+        "completion_tokens": 256,
+        "retrieval": "3/3",
+        "codes": [
+          "00N7RIOD",
+          "NUNQZB7J",
+          "VZ5A058N"
+        ]
+      }
+    }
+  },
+  "greedy_bit_exact_512tok": false,
+  "acceptance_gates": {
+    "load": {
+      "pass": true,
+      "models": [
+        "inkling-2-mini-q4"
+      ]
+    },
+    "chat": {
+      "pass": true,
+      "finish_reason": "stop",
+      "content": "Paris"
+    },
+    "reasoning": {
+      "pass": true,
+      "reasoning_len": 163,
+      "content": "432"
+    },
+    "tools": {
+      "pass": true,
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"key\":\"alpha-7\"}",
+            "name": "lookup_secret_code"
+          },
+          "id": "call_9579d942aefa5a46",
+          "type": "function"
+        }
+      ],
+      "final_content": "X9K7Q2-VERIFIED"
+    },
+    "vision": {
+      "pass": true,
+      "image": "ninfer-all/examples/cli/media/natural_scene.png",
+      "content": "24; sun is in the upper right sky."
+    },
+    "sustained_decode": {
+      "pass": true,
+      "decode_toks": 105.2,
+      "completion_tokens": 4096,
+      "wall_s": 39.18,
+      "looping": false
+    }
+  },
+  "all_gates_pass": false
+}

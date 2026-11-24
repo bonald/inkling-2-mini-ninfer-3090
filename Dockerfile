@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY --from=source /src/ ./
-COPY patches/ninfer.patch patches/inkling2-stability-cache-ttft.patch /project/patches/
+COPY patches/ninfer.patch patches/inkling2-stability-cache-ttft.patch patches/rtx3090-hillclimb-kv-planes.patch /project/patches/
 COPY bench/quality/capture-logits.patch /project/bench/quality/
 COPY scripts/configure.sh /project/scripts/
 ARG SCORE_CAPTURE=0
@@ -48,6 +48,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libcurl4t64 zli
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/apps/ninfer-serve /build/apps/ninfer-perplexity /usr/local/bin/
 COPY --from=notices /notices/ /usr/share/doc/inkling/
+COPY assets/draft-vocab-32k.bin /usr/local/share/inkling/draft-vocab-32k.bin
 COPY scripts/serve.sh /usr/local/bin/serve-inkling
 # An image build can run on a host without an attached NVIDIA driver.
 RUN export LD_LIBRARY_PATH="/usr/local/cuda/compat:${LD_LIBRARY_PATH}" \

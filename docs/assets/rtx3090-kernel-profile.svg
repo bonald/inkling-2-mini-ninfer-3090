@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="390" viewBox="0 0 960 390" role="img" aria-labelledby="t d">
+<title id="t">CUDA Kernel Stage Speedups and Draft Vocabulary Sweep</title>
+<desc id="d">Left: per-round CUDA kernel latency before and after K3 nvDN, K1-v2 28K full attention, and K2 DSpark head plus Markov. Right: c1 decode speed across pruned draft vocabulary sizes from 16K to 200K.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1628"/><stop offset="1" stop-color="#070b16"/></linearGradient>
+<linearGradient id="ink" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+</defs>
+<rect x="0.5" y="0.5" width="959" height="389" rx="16" fill="url(#bg)" stroke="#1e293b"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+<text x="32" y="42" font-size="19" font-weight="700" fill="#f1f5f9">Per-Stage CUDA Kernel Speedups &amp; Draft Vocabulary Pareto Sweep</text>
+<text x="32" y="64" font-size="12.5" fill="#94a3b8">Event-timed stage profiling (rows=4 verify round) and Wave 2A/2B bracketed vocabulary sweep on RTX 3090 (250 W)</text>
+
+<!-- Left panel: Kernel stage before/after -->
+<rect x="28" y="84" width="444" height="278" rx="12" fill="#0b1222" stroke="#1e293b"/>
+<text x="46" y="110" font-size="14" font-weight="700" fill="#e2e8f0">Stage Latency per Verify Round (ms, lower is better)</text>
+<rect x="46" y="120" width="10" height="10" rx="2" fill="#475569"/>
+<text x="62" y="129" font-size="11.5" fill="#94a3b8">Before</text>
+<rect x="116" y="120" width="10" height="10" rx="2" fill="url(#ink)"/>
+<text x="132" y="129" font-size="11.5" fill="#f8fafc">After (K1-v2 / K2 / K3)</text>
+
+<!-- Scale: 5.0 ms = 250 px -> 50 px/ms, starting at x=166 -->
+<!-- Stage 1: K3 nvDN (4.26 -> 2.88 ms, -32%) -->
+<text x="46" y="164" font-size="12.5" font-weight="600" fill="#e2e8f0">K3 · nvDN</text>
+<text x="46" y="179" font-size="11" fill="#94a3b8">44 NVFP4 visits</text>
+<rect x="166" y="150" width="213" height="14" rx="4" fill="#475569"/>
+<text x="386" y="161" font-size="11.5" fill="#94a3b8">4.26 ms</text>
+<rect x="166" y="168" width="144" height="15" rx="4" fill="url(#ink)"/>
+<text x="318" y="180" font-size="12" font-weight="700" fill="#67e8f9">2.88 ms (−32%)</text>
+
+<!-- Stage 2: K1-v2 fullA @ 28K (4.47 -> 2.74 ms, -39%) -->
+<text x="46" y="226" font-size="12.5" font-weight="600" fill="#e2e8f0">K1-v2 · fullA</text>
+<text x="46" y="241" font-size="11" fill="#94a3b8">8 full visits @ 28K</text>
+<rect x="166" y="212" width="223.5" height="14" rx="4" fill="#475569"/>
+<text x="396" y="223" font-size="11.5" fill="#94a3b8">4.47 ms</text>
+<rect x="166" y="230" width="137" height="15" rx="4" fill="url(#ink)"/>
+<text x="311" y="242" font-size="12" font-weight="700" fill="#67e8f9">2.74 ms (−39%)</text>
+
+<!-- Stage 3: K2 DSpark head + markov (0.93 -> 0.27 ms, -71%) -->
+<text x="46" y="288" font-size="12.5" font-weight="600" fill="#e2e8f0">K2 · DSpark</text>
+<text x="46" y="303" font-size="11" fill="#94a3b8">head + Markov</text>
+<rect x="166" y="274" width="46.5" height="14" rx="4" fill="#475569"/>
+<text x="220" y="285" font-size="11.5" fill="#94a3b8">0.93 ms</text>
+<rect x="166" y="292" width="13.5" height="15" rx="4" fill="url(#ink)"/>
+<text x="188" y="304" font-size="12" font-weight="700" fill="#67e8f9">0.27 ms (−71% · 3.4×)</text>
+
+<text x="46" y="344" font-size="11.5" fill="#94a3b8">nvGU (4.42 ms, ~724 GB/s) &amp; Q6_K head (0.57 ms) already at BW floor.</text>
+
+<!-- Right panel: Draft Vocab Sweep -->
+<rect x="488" y="84" width="444" height="278" rx="12" fill="#0b1222" stroke="#1e293b"/>
+<text x="506" y="110" font-size="14" font-weight="700" fill="#e2e8f0">Draft Vocab Size Sweep (c1 Decode tok/s)</text>
+<text x="506" y="128" font-size="11.5" fill="#94a3b8">All runs with K1-v2 + K3; lossless full-200K target verification</text>
+
+<!-- Y axis: 108..122 tok/s mapped to y=308..154 (11 px per tok/s) -->
+<line x1="546" y1="154" x2="546" y2="308" stroke="#1e293b"/>
+<line x1="546" y1="308" x2="906" y2="308" stroke="#1e293b"/>
+<line x1="546" y1="264" x2="906" y2="264" stroke="#1e293b" stroke-dasharray="3 3"/>
+<line x1="546" y1="220" x2="906" y2="220" stroke="#1e293b" stroke-dasharray="3 3"/>
+<line x1="546" y1="176" x2="906" y2="176" stroke="#1e293b" stroke-dasharray="3 3"/>
+<text x="538" y="312" font-size="10.5" fill="#64748b" text-anchor="end">108</text>
+<text x="538" y="268" font-size="10.5" fill="#64748b" text-anchor="end">112</text>
+<text x="538" y="224" font-size="10.5" fill="#64748b" text-anchor="end">116</text>
+<text x="538" y="180" font-size="10.5" fill="#64748b" text-anchor="end">120</text>
+
+<!-- Points:
+  16K:  112.94 -> y = 308 - (112.94-108)*11 = 253.7, x=582
+  24K:  114.25 -> y = 308 - (114.25-108)*11 = 239.3, x=654
+  32K:  115.75 (7-run med, peak 119.75) -> y = 308 - (115.75-108)*11 = 222.8, x=726
+  48K:  115.88 (vs 116.03 bracket) -> y = 308 - (115.88-108)*11 = 221.3, x=798
+  200K: 111.20 (K3 only, no K2) -> y = 308 - (111.20-108)*11 = 272.8, x=870
+-->
+<polyline fill="none" stroke="url(#ink)" stroke-width="3" points="582,253.7 654,239.3 726,222.8 798,221.3 870,272.8"/>
+
+<!-- 16K -->
+<circle cx="582" cy="253.7" r="5" fill="#94a3b8"/>
+<text x="582" y="242" font-size="11.5" fill="#cbd5e1" text-anchor="middle">112.9</text>
+<text x="582" y="325" font-size="11" fill="#94a3b8" text-anchor="middle">16K</text>
+<text x="582" y="339" font-size="10" fill="#64748b" text-anchor="middle">96.5% cov</text>
+
+<!-- 24K -->
+<circle cx="654" cy="239.3" r="5" fill="#94a3b8"/>
+<text x="654" y="228" font-size="11.5" fill="#cbd5e1" text-anchor="middle">114.3</text>
+<text x="654" y="325" font-size="11" fill="#94a3b8" text-anchor="middle">24K</text>
+<text x="654" y="339" font-size="10" fill="#64748b" text-anchor="middle">97.9% cov</text>
+
+<!-- 32K WINNER -->
+<circle cx="726" cy="222.8" r="8" fill="#22d3ee" stroke="#f8fafc" stroke-width="2"/>
+<text x="726" y="198" font-size="12.5" font-weight="700" fill="#67e8f9" text-anchor="middle">115.8 med</text>
+<text x="726" y="211" font-size="10.5" fill="#c084fc" text-anchor="middle">(119.8 peak)</text>
+<text x="726" y="325" font-size="11.5" font-weight="700" fill="#67e8f9" text-anchor="middle">32K ★</text>
+<text x="726" y="339" font-size="10" fill="#67e8f9" text-anchor="middle">98.7% cov</text>
+
+<!-- 48K -->
+<circle cx="798" cy="221.3" r="5" fill="#94a3b8"/>
+<text x="798" y="209" font-size="11.5" fill="#cbd5e1" text-anchor="middle">115.9</text>
+<text x="798" y="325" font-size="11" fill="#94a3b8" text-anchor="middle">48K</text>
+<text x="798" y="339" font-size="10" fill="#64748b" text-anchor="middle">99.2% cov</text>
+
+<!-- 200K -->
+<circle cx="870" cy="272.8" r="5" fill="#64748b"/>
+<text x="870" y="261" font-size="11.5" fill="#94a3b8" text-anchor="middle">111.2</text>
+<text x="870" y="325" font-size="11" fill="#94a3b8" text-anchor="middle">200K</text>
+<text x="870" y="339" font-size="10" fill="#64748b" text-anchor="middle">100% full</text>
+</g>
+</svg>

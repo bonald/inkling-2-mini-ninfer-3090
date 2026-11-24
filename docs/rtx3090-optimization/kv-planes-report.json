@@ -1,0 +1,287 @@
+{
+  "timestamp": "2026-11-24T00:27:32",
+  "ab_80k": {
+    "f16_a": {
+      "name": "k123-d4-v32k",
+      "tag": "w3-f16a",
+      "startup_s": 32.1,
+      "vram_gib": 20.88,
+      "kv_mib": 3326,
+      "free_gib": 1.64,
+      "short_greedy_toks": 136.18,
+      "c1_decode_med": 116.53,
+      "c1_decode_mean": 119.08,
+      "c1_all": [
+        135.94,
+        117.96,
+        108.27,
+        115.11,
+        127.54,
+        109.67
+      ],
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 26.83,
+        "prefill_toks": 1463.9,
+        "decode_toks": 102.09,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 64.7,
+        "prefill_toks": 1162.1,
+        "decode_toks": 74.85,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "vram_peak_gib": 20.9
+    },
+    "mxfp8": {
+      "name": "k123-mxfp8",
+      "tag": "w3-mxfp8",
+      "startup_s": 32.1,
+      "vram_gib": 19.69,
+      "kv_mib": 2082,
+      "free_gib": 2.83,
+      "short_greedy_toks": 139.25,
+      "c1_decode_med": 116.34,
+      "c1_decode_mean": 118.35,
+      "c1_all": [
+        139.65,
+        118.31,
+        111.53,
+        114.56,
+        118.13,
+        107.91
+      ],
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 28.34,
+        "prefill_toks": 1386.0,
+        "decode_toks": 91.6,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 69.65,
+        "prefill_toks": 1079.6,
+        "decode_toks": 80.19,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "vram_peak_gib": 19.72,
+      "gates": {
+        "load": {
+          "pass": true,
+          "models": [
+            "inkling-2-mini-q4"
+          ]
+        },
+        "chat": {
+          "pass": true,
+          "finish_reason": "stop",
+          "content": "Paris"
+        },
+        "reasoning": {
+          "pass": true,
+          "reasoning_len": 208,
+          "content": "432"
+        },
+        "tools": {
+          "pass": true,
+          "tool_calls": [
+            {
+              "function": {
+                "arguments": "{\"key\":\"alpha-7\"}",
+                "name": "lookup_secret_code"
+              },
+              "id": "call_7d2e0433abf31185",
+              "type": "function"
+            }
+          ],
+          "final_content": "X9K7Q2-VERIFIED"
+        },
+        "vision": {
+          "pass": true,
+          "image": "ninfer-all/examples/cli/media/natural_scene.png",
+          "content": "24; sun is in the upper right sky."
+        },
+        "sustained_decode": {
+          "pass": true,
+          "decode_toks": 106.3,
+          "completion_tokens": 4096,
+          "wall_s": 38.81,
+          "looping": false
+        }
+      },
+      "all_gates_pass": true
+    },
+    "rk8v4": {
+      "name": "k123-rk8v4",
+      "tag": "w3-rk8v4",
+      "startup_s": 32.1,
+      "vram_gib": 19.4,
+      "kv_mib": 1781,
+      "free_gib": 3.12,
+      "short_greedy_toks": 140.08,
+      "c1_decode_med": 113.96,
+      "c1_decode_mean": 114.88,
+      "c1_all": [
+        124.14,
+        115.63,
+        107.37,
+        112.29,
+        122.24,
+        107.58
+      ],
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 28.6,
+        "prefill_toks": 1373.6,
+        "decode_toks": 82.91,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 69.9,
+        "prefill_toks": 1075.7,
+        "decode_toks": 73.23,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "vram_peak_gib": 19.43,
+      "gates": {
+        "load": {
+          "pass": true,
+          "models": [
+            "inkling-2-mini-q4"
+          ]
+        },
+        "chat": {
+          "pass": true,
+          "finish_reason": "stop",
+          "content": "Paris"
+        },
+        "reasoning": {
+          "pass": true,
+          "reasoning_len": 163,
+          "content": "432"
+        },
+        "tools": {
+          "pass": true,
+          "tool_calls": [
+            {
+              "function": {
+                "arguments": "{\"key\":\"alpha-7\"}",
+                "name": "lookup_secret_code"
+              },
+              "id": "call_53311fcc3d0250cb",
+              "type": "function"
+            }
+          ],
+          "final_content": "X9K7Q2-VERIFIED"
+        },
+        "vision": {
+          "pass": true,
+          "image": "ninfer-all/examples/cli/media/natural_scene.png",
+          "content": "24; top right."
+        },
+        "sustained_decode": {
+          "pass": true,
+          "decode_toks": 102.78,
+          "completion_tokens": 4096,
+          "wall_s": 40.12,
+          "looping": false
+        }
+      },
+      "all_gates_pass": true
+    },
+    "f16_b": {
+      "name": "k123-d4-v32k",
+      "tag": "w3-f16b",
+      "startup_s": 32.1,
+      "vram_gib": 20.88,
+      "kv_mib": 3326,
+      "free_gib": 1.64,
+      "short_greedy_toks": 137.59,
+      "c1_decode_med": 113.78,
+      "c1_decode_mean": 113.75,
+      "c1_all": [
+        120.86,
+        115.69,
+        109.06,
+        111.87,
+        118.77,
+        106.22
+      ],
+      "ctx50pct": {
+        "prompt_tokens": 39281,
+        "ttft_s": 27.31,
+        "prefill_toks": 1438.2,
+        "decode_toks": 90.93,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "ctx95pct": {
+        "prompt_tokens": 75190,
+        "ttft_s": 66.12,
+        "prefill_toks": 1137.2,
+        "decode_toks": 72.2,
+        "completion_tokens": 256,
+        "retrieval": "3/3"
+      },
+      "vram_peak_gib": 20.9
+    }
+  },
+  "extended": {
+    "mxfp8_131k": {
+      "name": "k123-mxfp8-131k",
+      "ok": true,
+      "startup_s": 32.1,
+      "vram_peak_gib": 20.69,
+      "kv_mib": 3066,
+      "free_gib": 1.85,
+      "prompt_tokens": 121222,
+      "ttft_s": 146.87,
+      "prefill_toks": 825.4,
+      "decode_toks": 51.01,
+      "completion_tokens": 256,
+      "retrieval": "3/3"
+    },
+    "rk8v4_160k": {
+      "name": "k123-rk8v4-160k",
+      "ok": true,
+      "startup_s": 32.1,
+      "vram_peak_gib": 20.74,
+      "kv_mib": 3121,
+      "free_gib": 1.81,
+      "prompt_tokens": 148561,
+      "ttft_s": 204.89,
+      "prefill_toks": 725.1,
+      "decode_toks": 53.84,
+      "completion_tokens": 256,
+      "retrieval": "3/3"
+    },
+    "mxfp8_c2_64k": {
+      "name": "k123-mxfp8-c2",
+      "ok": true,
+      "startup_s": 32.1,
+      "vram_peak_gib": 21.09,
+      "kv_mib": 3495,
+      "free_gib": 1.46,
+      "agg_toks": 140.87,
+      "per_req_decode": [
+        71.74,
+        72.78
+      ],
+      "completion_tokens": [
+        512,
+        512
+      ],
+      "wall_s": 7.27
+    }
+  }
+}
