@@ -1,72 +1,70 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="414" viewBox="0 0 960 414" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="450" viewBox="0 0 960 450" role="img" aria-labelledby="t d">
 <title id="t">RTX 3090 (24 GiB) VRAM Footprint and Unlocked Context Capacity by KV Format</title>
-<desc id="d">Peak GPU VRAM usage and KV cache MiB across F16, MXFP8, and rk8v4 configurations up to 160K context and c=2 concurrency on a single 24 GiB RTX 3090.</desc>
+<desc id="d">Peak GPU VRAM usage and KV cache MiB across F16, MXFP8 (target plus DSpark), and rk8v4 configurations up to 196K context and c=2 concurrency on a single 24 GiB RTX 3090.</desc>
 <defs>
 <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1628"/><stop offset="1" stop-color="#070b16"/></linearGradient>
 <linearGradient id="vram-mxfp8" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
 <linearGradient id="vram-rk8" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
 </defs>
-<rect x="0.5" y="0.5" width="959" height="413" rx="16" fill="url(#bg)" stroke="#1e293b"/>
+<rect x="0.5" y="0.5" width="959" height="449" rx="16" fill="url(#bg)" stroke="#1e293b"/>
 <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
 <text x="32" y="42" font-size="20" font-weight="700" fill="#f1f5f9">24 GiB RTX 3090 — VRAM Footprint &amp; Unlocked Context Capacity</text>
-<text x="32" y="64" font-size="12.5" fill="#94a3b8">Weights (15.5 GiB, vision + DSpark resident) + KV planes + workspace. Safe operational cap: 23.0 GiB (with desktop).</text>
+<text x="32" y="64" font-size="12.5" fill="#94a3b8">Weights (15.5 GiB, vision + DSpark resident) + quantized target &amp; DSpark KV planes + workspace. Safe cap: 23.0 GiB.</text>
 
-<!-- Scale: x=260 -> 0 GiB, x=836 -> 24 GiB (24 px per GiB) -->
-<line x1="260" y1="86" x2="260" y2="342" stroke="#1e293b" stroke-width="1"/>
-<text x="260" y="360" font-size="11" fill="#64748b" text-anchor="middle">0 GiB</text>
-<line x1="404" y1="86" x2="404" y2="342" stroke="#1e293b" stroke-width="1"/>
-<text x="404" y="360" font-size="11" fill="#64748b" text-anchor="middle">6</text>
-<line x1="548" y1="86" x2="548" y2="342" stroke="#1e293b" stroke-width="1"/>
-<text x="548" y="360" font-size="11" fill="#64748b" text-anchor="middle">12</text>
-<line x1="692" y1="86" x2="692" y2="342" stroke="#1e293b" stroke-width="1"/>
-<text x="692" y="360" font-size="11" fill="#64748b" text-anchor="middle">18</text>
-<line x1="812" y1="86" x2="812" y2="342" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.8"/>
-<text x="812" y="360" font-size="11" font-weight="600" fill="#fbbf24" text-anchor="middle">23.0 cap</text>
-<line x1="836" y1="86" x2="836" y2="342" stroke="#ef4444" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>
-<text x="844" y="360" font-size="11" fill="#f87171">24</text>
+<!-- Scale: x=268 -> 0 GiB, x=796 -> 24 GiB (22 px per GiB) -->
+<line x1="268" y1="86" x2="268" y2="378" stroke="#1e293b" stroke-width="1"/>
+<text x="268" y="396" font-size="11" fill="#64748b" text-anchor="middle">0 GiB</text>
+<line x1="400" y1="86" x2="400" y2="378" stroke="#1e293b" stroke-width="1"/>
+<text x="400" y="396" font-size="11" fill="#64748b" text-anchor="middle">6</text>
+<line x1="532" y1="86" x2="532" y2="378" stroke="#1e293b" stroke-width="1"/>
+<text x="532" y="396" font-size="11" fill="#64748b" text-anchor="middle">12</text>
+<line x1="664" y1="86" x2="664" y2="378" stroke="#1e293b" stroke-width="1"/>
+<text x="664" y="396" font-size="11" fill="#64748b" text-anchor="middle">18</text>
+<line x1="774" y1="86" x2="774" y2="378" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.8"/>
+<text x="774" y="396" font-size="11" font-weight="600" fill="#fbbf24" text-anchor="middle">23.0 cap</text>
+<line x1="796" y1="86" x2="796" y2="378" stroke="#ef4444" stroke-width="1" stroke-dasharray="3 3" opacity="0.6"/>
+<text x="804" y="396" font-size="11" fill="#f87171">24</text>
 
 <!-- Row 1: Baseline F16 @ 80K (21.19 GiB) -->
 <text x="32" y="109" font-size="13" font-weight="600" fill="#cbd5e1">F16 Baseline · 80K ctx</text>
-<rect x="260" y="94" width="508.6" height="22" rx="5" fill="#475569"/>
-<text x="776" y="110" font-size="12.5" fill="#cbd5e1">21.19 GiB</text>
-<text x="852" y="110" font-size="11.5" fill="#94a3b8">KV 3,326 MiB</text>
+<rect x="268" y="94" width="466.2" height="22" rx="5" fill="#475569"/>
+<text x="812" y="110" font-size="12" fill="#cbd5e1">21.19 GiB · KV 3,326 MiB</text>
 
 <!-- Row 2: F16 + K2-32K @ 80K (20.90 GiB) -->
 <text x="32" y="145" font-size="13" font-weight="600" fill="#cbd5e1">F16 + 32K Draft · 80K ctx</text>
-<rect x="260" y="130" width="501.6" height="22" rx="5" fill="#38bdf8" fill-opacity="0.75"/>
-<text x="770" y="146" font-size="12.5" fill="#e0f2fe">20.90 GiB</text>
-<text x="852" y="146" font-size="11.5" fill="#7dd3fc">−0.29 GiB</text>
+<rect x="268" y="130" width="459.8" height="22" rx="5" fill="#38bdf8" fill-opacity="0.75"/>
+<text x="812" y="146" font-size="12" fill="#e0f2fe">20.90 GiB · −0.29 GiB</text>
 
-<!-- Row 3: MXFP8 @ 80K (19.72 GiB) -->
-<text x="32" y="181" font-size="13" font-weight="700" fill="#f8fafc">MXFP8 · 80K ctx (trained)</text>
-<rect x="260" y="166" width="473.3" height="22" rx="5" fill="url(#vram-mxfp8)"/>
-<text x="742" y="182" font-size="12.5" font-weight="700" fill="#f8fafc">19.72 GiB</text>
-<text x="852" y="182" font-size="11.5" fill="#67e8f9">2.83 GiB free</text>
+<!-- Row 3: MXFP8 Target+DSpark @ 80K (19.54 GiB) -->
+<text x="32" y="181" font-size="13" font-weight="700" fill="#f8fafc">MXFP8 (T+DSpark) · 80K</text>
+<rect x="268" y="166" width="429.9" height="22" rx="5" fill="url(#vram-mxfp8)"/>
+<text x="812" y="182" font-size="12" font-weight="700" fill="#67e8f9">19.54 GiB · KV 1,926 MiB</text>
 
 <!-- Row 4: rk8v4 @ 80K (19.43 GiB) -->
 <text x="32" y="217" font-size="13" font-weight="700" fill="#f8fafc">rk8v4 · 80K ctx</text>
-<rect x="260" y="202" width="466.3" height="22" rx="5" fill="url(#vram-rk8)"/>
-<text x="735" y="218" font-size="12.5" font-weight="700" fill="#f8fafc">19.43 GiB</text>
-<text x="852" y="218" font-size="11.5" fill="#6ee7b7">3.12 GiB free</text>
+<rect x="268" y="202" width="427.5" height="22" rx="5" fill="url(#vram-rk8)"/>
+<text x="812" y="218" font-size="12" font-weight="700" fill="#6ee7b7">19.43 GiB · 3.12 GiB free</text>
 
 <!-- Row 5: MXFP8 @ 131K (20.69 GiB) -->
 <text x="32" y="253" font-size="13" font-weight="700" fill="#e9d5ff">MXFP8 · 131K ctx (1.6×)</text>
-<rect x="260" y="238" width="496.6" height="22" rx="5" fill="url(#vram-mxfp8)"/>
-<text x="765" y="254" font-size="12.5" font-weight="700" fill="#f8fafc">20.69 GiB</text>
-<text x="852" y="254" font-size="11.5" fill="#d8b4fe">1.85 GiB free</text>
+<rect x="268" y="238" width="455.2" height="22" rx="5" fill="url(#vram-mxfp8)"/>
+<text x="812" y="254" font-size="12" font-weight="700" fill="#d8b4fe">20.69 GiB · 1.85 GiB free</text>
 
-<!-- Row 6: rk8v4 @ 160K (20.74 GiB) -->
-<text x="32" y="289" font-size="13" font-weight="700" fill="#a7f3d0">rk8v4 · 160K ctx (2.0×)</text>
-<rect x="260" y="274" width="497.8" height="22" rx="5" fill="url(#vram-rk8)"/>
-<text x="766" y="290" font-size="12.5" font-weight="700" fill="#f8fafc">20.74 GiB</text>
-<text x="852" y="290" font-size="11.5" fill="#6ee7b7">1.81 GiB free</text>
+<!-- Row 6: MXFP8 (T+DSpark) @ 163K (21.05 GiB) -->
+<text x="32" y="289" font-size="13" font-weight="700" fill="#e9d5ff">MXFP8 · 163K ctx (2.0×)</text>
+<rect x="268" y="274" width="463.1" height="22" rx="5" fill="url(#vram-mxfp8)"/>
+<text x="812" y="290" font-size="12" font-weight="700" fill="#67e8f9">21.05 GiB · 71.2 t/s (3/3)</text>
 
-<!-- Row 7: MXFP8 c=2 @ 64K (21.09 GiB) -->
-<text x="32" y="325" font-size="13" font-weight="700" fill="#fde68a">MXFP8 · c=2 × 64K ctx</text>
-<rect x="260" y="310" width="506.2" height="22" rx="5" fill="#f59e0b" fill-opacity="0.8"/>
-<text x="774" y="326" font-size="12.5" font-weight="700" fill="#fef3c7">21.09 GiB</text>
-<text x="852" y="326" font-size="11.5" fill="#fcd34d">140.9 agg t/s</text>
+<!-- Row 7: rk8v4 (T+DSpark) @ 196K (20.93 GiB) -->
+<text x="32" y="325" font-size="13" font-weight="700" fill="#a7f3d0">rk8v4 · 196K ctx (2.4×)</text>
+<rect x="268" y="310" width="460.5" height="22" rx="5" fill="url(#vram-rk8)"/>
+<text x="812" y="326" font-size="12" font-weight="700" fill="#6ee7b7">20.93 GiB · 69.0 t/s (3/3)</text>
 
-<text x="32" y="392" font-size="12.5" fill="#94a3b8">At <tspan fill="#67e8f9" font-weight="700">131K context</tspan>, MXFP8 uses <tspan fill="#67e8f9" font-weight="700">0.50 GiB less VRAM</tspan> than the original 80K F16 baseline; <tspan fill="#6ee7b7" font-weight="700">rk8v4</tspan> fits <tspan fill="#6ee7b7" font-weight="700">160K context</tspan> with 1.81 GiB free.</text>
+<!-- Row 8: MXFP8 c=2 @ 64K (21.09 GiB) -->
+<text x="32" y="361" font-size="13" font-weight="700" fill="#fde68a">MXFP8 · c=2 × 64K ctx</text>
+<rect x="268" y="346" width="464.0" height="22" rx="5" fill="#f59e0b" fill-opacity="0.8"/>
+<text x="812" y="362" font-size="12" font-weight="700" fill="#fcd34d">21.09 GiB · 140.9 agg t/s</text>
+
+<text x="32" y="428" font-size="12.5" fill="#94a3b8">With MXFP8 on both target and DSpark: <tspan fill="#67e8f9" font-weight="700">163K MXFP8</tspan> and <tspan fill="#6ee7b7" font-weight="700">196K rk8v4</tspan> both fit below 21.1 GiB with vision + DSpark resident.</text>
 </g>
 </svg>

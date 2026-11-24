@@ -38,11 +38,24 @@ Ported `ninfer-all`'s 128-wide KV plane codecs (`mxfp8`, `rk8v4`, `int8`, `rk4v4
   - **`rk8v4` @ 163,840 ctx (`c=1`):** KV `3,121 MiB`, peak VRAM **20.74 GiB (1.81 GiB free)** — **148,561 prompt tok**, prefill `725.1 tok/s`, decode **53.84 tok/s**, **3/3 needles PASS**!
   - **MXFP8 @ 65,536 ctx (`c=2`):** KV `3,495 MiB`, peak VRAM **21.09 GiB (1.46 GiB free)** — **140.87 aggregate tok/s** (`71.74 + 72.78 tok/s` per stream)!
 
+### Wave 4 — Maya `#1154` Ports: DSpark MXFP8 KV, WMMA Tensor-Core Verify & Unified `WidthPolicy` 7 (2026-11-24)
+Ported the three highest-payoff architectural wins from `mw00/project-maya#1154` into `ninfer-3090` (`maya-port-report.json`):
+1. **DSpark MXFP8 full-attention KV (`spark_rotate` + `plan_spark`):** Cuts 80K total KV `2,082 → 1,926 MiB` (−42.1% vs F16 `3,326 MiB`, peak VRAM **19.54 GiB**, **3.04 GiB free**).
+2. **WMMA tensor-core shared-tile verify & DSpark attention (`attention_verify_mma_kernel`, `INKLING_VERIFY_MMA=1|2`) + compile-time `KvCoding` specialization (`prompt_attention_mma`):**
+   - **39.3K (50% ctx) decode:** `91.60 → 128.92 tok/s` (**+48.2%** vs F16 baseline, 3/3 needles)
+   - **75.2K (95% ctx) decode:** `80.19 → 108.94 tok/s` (**+66.5%** vs F16 baseline, 3/3 needles)
+   - **64.3K code decode:** `77.39 → 93.33 tok/s` (**+20.6%**, 3/3 needles)
+   - **39K/75K MXFP8 prefill:** `1,386 → 1,443` and `1,080 → 1,138 tok/s` (+4–5%, matching F16 prefill)
+3. **Unified `WidthPolicy` (`capacity=8`, `--draft-tokens 7`):** Fixed `spark_controller` silently clamping `WidthPolicy` back to 1–3 and enabled `WidthPolicy` on both greedy and sampled requests. Lifted `code_temp1` (`111.9 → 119.9 tok/s`), sustained 4,096-tok decode (`106.3 → 108.3 tok/s`), and passed **6/6 acceptance gates**.
+4. **New Extended Capacity Milestones (Single 24 GiB RTX 3090, vision + DSpark resident):**
+   - **MXFP8 @ 163,840 ctx (`149,940` prompt tok):** `3,411 MiB` KV, **21.05 GiB VRAM** (`1.21 GiB free`), **71.23 tok/s decode** (+40% faster than Wave 3 @ 121K!), **3/3 needles PASS**.
+   - **`rk8v4` @ 196,608 ctx (`181,225` prompt tok):** `3,284 MiB` KV, **20.93 GiB VRAM** (`1.13 GiB free`), **68.99 tok/s decode** (+28% faster than Wave 3 @ 148K!), **3/3 needles PASS**.
+
 ### Ranked Remaining Levers (Next Wave Candidates)
-1. **DSpark drafter FP8 KV + CUDA-graphed drafter + tensor-core drafter attention + `--draft-tokens 7` (inspired by `project-maya` v1.1.75):** Cuts DSpark's own full-context KV cache 2×, eliminates ~70 host launches/round, and accelerates 65K+ drafter attention + high-acceptance code/tool generation.
-2. **Raise GPU power limit above 250 W** (hardware/thermal user policy — intentionally kept at 250 W per `nvidia-power-limit.service`): would unlock ~2× prefill compute ceiling (59.8 → 137 TFLOPS BF16 at 390 W).
-3. **Eliminate 64-bit `atomicAdd` contention in `nvDN`** via a separate scratch + reduction pass: ~0.4–0.5 ms/round (~+3% decode), medium kernel complexity.
-4. **Skip `select_weight_layout` repack for short prompts (`t ≤ 64`)**: saves ~100–130 ms on short-prompt TTFT (minor numeric difference between vector vs matrix prefill).
+1. **Raise GPU power limit above 250 W** (hardware/thermal user policy — intentionally kept at 250 W per `nvidia-power-limit.service`): would unlock ~2× prefill compute ceiling (59.8 → 137 TFLOPS BF16 at 390 W).
+2. **INT8-quantized Markov fold (`table_m`) + Q8 dense projection 4-row prefetch (`ggml_vec_q8_0.cu`):** ~0.5–1.0 ms/round additional short-ctx decode gain.
+3. **Eliminate 64-bit `atomicAdd` contention in `nvDN`** via a separate scratch + reduction pass: ~0.4–0.5 ms/round (~+3% decode).
+4. **Optional `--no-vision` mode for 262K ctx on 24 GB:** Skipping the 1.1 GiB vision tower frees enough VRAM for 262,144 MXFP8 context on a single RTX 3090.
 
 ## Full Experiment History
 

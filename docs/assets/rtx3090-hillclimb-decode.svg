@@ -1,91 +1,98 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="472" viewBox="0 0 960 472" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="492" viewBox="0 0 960 492" role="img" aria-labelledby="t d">
 <title id="t">Inkling 2 Mini RTX 3090 (250 W) Optimization: Decode Throughput Across Contexts</title>
-<desc id="d">Decode tokens per second across short greedy, c1 sampled median, 39.3K context, and 75.2K context comparing clean F16 baseline, F16 with K1-v2/K2/K3 kernels, and MXFP8 with K1-v2/K2/K3 kernels.</desc>
+<desc id="d">Decode tokens per second across short greedy, c1 sampled, 39.3K context, 64.3K code, and 75.2K context comparing clean F16 baseline, F16 + K1-v2/K2/K3, and Wave 4 MXFP8 + WMMA Verify + DSpark MXFP8 KV + WidthPolicy 7.</desc>
 <defs>
 <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e1628"/><stop offset="1" stop-color="#070b16"/></linearGradient>
-<linearGradient id="mxfp8" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+<linearGradient id="w4" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c084fc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
 <linearGradient id="f16opt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
 <filter id="glow" x="-10%" y="-80%" width="120%" height="260%"><feGaussianBlur stdDeviation="5"/></filter>
 </defs>
-<rect x="0.5" y="0.5" width="959" height="471" rx="16" fill="url(#bg)" stroke="#1e293b"/>
+<rect x="0.5" y="0.5" width="959" height="491" rx="16" fill="url(#bg)" stroke="#1e293b"/>
 <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
 <text x="32" y="42" font-size="20" font-weight="700" fill="#f1f5f9">RTX 3090 (250 W Cap) — Decode Throughput Across Contexts</text>
-<text x="32" y="64" font-size="12.5" fill="#94a3b8">Control-bracketed A/B runs on UD-IQ4_XS + DSpark (706.2 GB/s measured copy BW; 100% 3/3 needle retrieval on all long-context runs)</text>
+<text x="32" y="64" font-size="12.5" fill="#94a3b8">Control-bracketed A/B runs on UD-IQ4_XS + DSpark (706.2 GB/s copy BW; 100% 3/3 needle retrieval on every long-context run)</text>
 
 <!-- Legend -->
 <rect x="32" y="78" width="12" height="12" rx="3" fill="#475569"/>
 <text x="50" y="88" font-size="12" fill="#cbd5e1">Clean F16 Baseline</text>
-<rect x="184" y="78" width="12" height="12" rx="3" fill="url(#f16opt)"/>
-<text x="202" y="88" font-size="12" fill="#cbd5e1">F16 + K1-v2 / K2-32K / K3 (lossless)</text>
-<rect x="432" y="78" width="12" height="12" rx="3" fill="url(#mxfp8)"/>
-<text x="450" y="88" font-size="12" font-weight="600" fill="#f8fafc">MXFP8 KV + K1-v2 / K2-32K / K3 (trained KV, −1.18 GiB)</text>
+<rect x="182" y="78" width="12" height="12" rx="3" fill="url(#f16opt)"/>
+<text x="200" y="88" font-size="12" fill="#cbd5e1">Wave 2–3: K1-v2 / K2-32K / K3</text>
+<rect x="404" y="78" width="12" height="12" rx="3" fill="url(#w4)"/>
+<text x="422" y="88" font-size="12" font-weight="600" fill="#f8fafc">Wave 4: MXFP8 Target+DSpark KV + WMMA Verify + WidthPolicy 7</text>
 
 <!-- Grid lines: x=220 -> 0 tok/s, x=796 -> 160 tok/s (scale = 3.6 px per tok/s) -->
-<line x1="220" y1="106" x2="220" y2="392" stroke="#1e293b" stroke-width="1"/>
-<text x="220" y="410" font-size="11" fill="#64748b" text-anchor="middle">0</text>
-<line x1="364" y1="106" x2="364" y2="392" stroke="#1e293b" stroke-width="1"/>
-<text x="364" y="410" font-size="11" fill="#64748b" text-anchor="middle">40</text>
-<line x1="508" y1="106" x2="508" y2="392" stroke="#1e293b" stroke-width="1"/>
-<text x="508" y="410" font-size="11" fill="#64748b" text-anchor="middle">80</text>
-<line x1="652" y1="106" x2="652" y2="392" stroke="#1e293b" stroke-width="1"/>
-<text x="652" y="410" font-size="11" fill="#64748b" text-anchor="middle">120</text>
-<line x1="796" y1="106" x2="796" y2="392" stroke="#1e293b" stroke-width="1"/>
-<text x="796" y="410" font-size="11" fill="#64748b" text-anchor="middle">160</text>
-<text x="928" y="410" font-size="11" fill="#64748b" text-anchor="end">decode tokens/s</text>
+<line x1="220" y1="106" x2="220" y2="412" stroke="#1e293b" stroke-width="1"/>
+<text x="220" y="430" font-size="11" fill="#64748b" text-anchor="middle">0</text>
+<line x1="364" y1="106" x2="364" y2="412" stroke="#1e293b" stroke-width="1"/>
+<text x="364" y="430" font-size="11" fill="#64748b" text-anchor="middle">40</text>
+<line x1="508" y1="106" x2="508" y2="412" stroke="#1e293b" stroke-width="1"/>
+<text x="508" y="430" font-size="11" fill="#64748b" text-anchor="middle">80</text>
+<line x1="652" y1="106" x2="652" y2="412" stroke="#1e293b" stroke-width="1"/>
+<text x="652" y="430" font-size="11" fill="#64748b" text-anchor="middle">120</text>
+<line x1="796" y1="106" x2="796" y2="412" stroke="#1e293b" stroke-width="1"/>
+<text x="796" y="430" font-size="11" fill="#64748b" text-anchor="middle">160</text>
+<text x="928" y="430" font-size="11" fill="#64748b" text-anchor="end">decode tokens/s</text>
 
-<!-- Group 1: Short Greedy (512 tok) y=114..168 -->
-<text x="32" y="136" font-size="13.5" font-weight="600" fill="#e2e8f0">Short Greedy</text>
-<text x="32" y="153" font-size="11.5" fill="#94a3b8">512 tok, temp=0</text>
-<rect x="220" y="114" width="451.7" height="15" rx="4" fill="#475569"/>
-<text x="680" y="126" font-size="12" fill="#94a3b8">125.46</text>
-<rect x="220" y="133" width="502.5" height="15" rx="4" fill="url(#f16opt)"/>
-<text x="731" y="145" font-size="12" font-weight="600" fill="#bae6fd">139.57</text>
-<rect x="220" y="152" width="501.3" height="17" rx="4" fill="url(#mxfp8)" opacity="0.4" filter="url(#glow)"/>
-<rect x="220" y="152" width="501.3" height="17" rx="4" fill="url(#mxfp8)"/>
-<text x="731" y="165" font-size="13" font-weight="700" fill="#f8fafc">139.25</text>
-<rect x="854" y="149" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.12" stroke="#22d3ee" stroke-opacity="0.5"/>
-<text x="891" y="164" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+11.0%</text>
+<!-- Group 1: Short Greedy (512 tok) y=114..166 -->
+<text x="32" y="135" font-size="13.5" font-weight="600" fill="#e2e8f0">Short Greedy</text>
+<text x="32" y="151" font-size="11.5" fill="#94a3b8">512 tok, temp=0</text>
+<rect x="220" y="114" width="451.7" height="14" rx="4" fill="#475569"/>
+<text x="680" y="125" font-size="12" fill="#94a3b8">125.46</text>
+<rect x="220" y="132" width="502.5" height="14" rx="4" fill="url(#f16opt)"/>
+<text x="731" y="143" font-size="12" font-weight="600" fill="#bae6fd">139.57 (F16) / 139.25 (MXFP8)</text>
+<rect x="220" y="150" width="494.4" height="16" rx="4" fill="url(#w4)" opacity="0.38" filter="url(#glow)"/>
+<rect x="220" y="150" width="494.4" height="16" rx="4" fill="url(#w4)"/>
+<text x="723" y="162" font-size="12.5" font-weight="700" fill="#f8fafc">137.32</text>
+<rect x="854" y="147" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.12" stroke="#22d3ee" stroke-opacity="0.5"/>
+<text x="891" y="162" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+11.3%</text>
 
-<!-- Group 2: c1 Sampled Median (6 prompts) y=188..242 -->
-<text x="32" y="210" font-size="13.5" font-weight="600" fill="#e2e8f0">c1 Sampled (med)</text>
-<text x="32" y="227" font-size="11.5" fill="#94a3b8">6 prompts × 512 tok, temp=1</text>
-<rect x="220" y="188" width="378.6" height="15" rx="4" fill="#475569"/>
-<text x="607" y="200" font-size="12" fill="#94a3b8">105.18 (5-run med)</text>
-<rect x="220" y="207" width="416.7" height="15" rx="4" fill="url(#f16opt)"/>
-<text x="645" y="219" font-size="12" font-weight="600" fill="#bae6fd">115.75 (7-run med)</text>
-<rect x="220" y="226" width="418.8" height="17" rx="4" fill="url(#mxfp8)" opacity="0.4" filter="url(#glow)"/>
-<rect x="220" y="226" width="418.8" height="17" rx="4" fill="url(#mxfp8)"/>
-<text x="647" y="239" font-size="13" font-weight="700" fill="#f8fafc">116.34</text>
-<rect x="854" y="223" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.12" stroke="#22d3ee" stroke-opacity="0.5"/>
-<text x="891" y="238" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+10.6%</text>
+<!-- Group 2: c1 Sampled / Code temp=1 y=184..236 -->
+<text x="32" y="205" font-size="13.5" font-weight="600" fill="#e2e8f0">Sampled (temp=1)</text>
+<text x="32" y="221" font-size="11.5" fill="#94a3b8">c1 med / 700-tok code</text>
+<rect x="220" y="184" width="378.6" height="14" rx="4" fill="#475569"/>
+<text x="607" y="195" font-size="12" fill="#94a3b8">105.18 (c1 5-run med)</text>
+<rect x="220" y="202" width="418.8" height="14" rx="4" fill="url(#f16opt)"/>
+<text x="647" y="213" font-size="12" font-weight="600" fill="#bae6fd">116.34 (c1) / 111.91 (code)</text>
+<rect x="220" y="220" width="431.6" height="16" rx="4" fill="url(#w4)" opacity="0.38" filter="url(#glow)"/>
+<rect x="220" y="220" width="431.6" height="16" rx="4" fill="url(#w4)"/>
+<text x="660" y="232" font-size="12.5" font-weight="700" fill="#f8fafc">119.90 (code) / 108.30 (4K sust)</text>
+<rect x="854" y="217" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.12" stroke="#22d3ee" stroke-opacity="0.5"/>
+<text x="891" y="232" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+14.0%</text>
 
-<!-- Group 3: 39.3K Context (50% of 80K) y=262..316 -->
-<text x="32" y="284" font-size="13.5" font-weight="600" fill="#e2e8f0">39.3K Context</text>
-<text x="32" y="301" font-size="11.5" fill="#94a3b8">50% of 80K, 3/3 needles</text>
-<rect x="220" y="262" width="313.1" height="15" rx="4" fill="#475569"/>
-<text x="541" y="274" font-size="12" fill="#94a3b8">86.97</text>
-<rect x="220" y="281" width="397.4" height="15" rx="4" fill="url(#f16opt)"/>
-<text x="626" y="293" font-size="12" font-weight="600" fill="#bae6fd">110.38 (qual) / 96.51 (w3)</text>
-<rect x="220" y="300" width="329.8" height="17" rx="4" fill="url(#mxfp8)" opacity="0.4" filter="url(#glow)"/>
-<rect x="220" y="300" width="329.8" height="17" rx="4" fill="url(#mxfp8)"/>
-<text x="558" y="313" font-size="13" font-weight="700" fill="#f8fafc">91.60</text>
-<rect x="854" y="297" width="74" height="22" rx="11" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-opacity="0.5"/>
-<text x="891" y="312" font-size="12" font-weight="700" fill="#7dd3fc" text-anchor="middle">+26.9% F16</text>
+<!-- Group 3: 39.3K Context y=254..306 -->
+<text x="32" y="275" font-size="13.5" font-weight="600" fill="#e2e8f0">39.3K Context</text>
+<text x="32" y="291" font-size="11.5" fill="#94a3b8">50% of 80K, 3/3 needles</text>
+<rect x="220" y="254" width="313.1" height="14" rx="4" fill="#475569"/>
+<text x="541" y="265" font-size="12" fill="#94a3b8">86.97</text>
+<rect x="220" y="272" width="329.8" height="14" rx="4" fill="url(#f16opt)"/>
+<text x="558" y="283" font-size="12" font-weight="600" fill="#bae6fd">91.60 (w3 MXFP8) / 110.38 (qual F16)</text>
+<rect x="220" y="290" width="464.1" height="16" rx="4" fill="url(#w4)" opacity="0.45" filter="url(#glow)"/>
+<rect x="220" y="290" width="464.1" height="16" rx="4" fill="url(#w4)"/>
+<text x="692" y="302" font-size="13" font-weight="700" fill="#f8fafc">128.92 (d7-mma2)</text>
+<rect x="854" y="287" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.16" stroke="#22d3ee" stroke-opacity="0.65"/>
+<text x="891" y="302" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+48.2%</text>
 
-<!-- Group 4: 75.2K Context (95% of 80K) y=336..390 -->
-<text x="32" y="358" font-size="13.5" font-weight="600" fill="#e2e8f0">75.2K Context</text>
-<text x="32" y="375" font-size="11.5" fill="#94a3b8">95% of 80K, 3/3 needles</text>
-<rect x="220" y="336" width="235.5" height="15" rx="4" fill="#475569"/>
-<text x="464" y="348" font-size="12" fill="#94a3b8">65.42</text>
-<rect x="220" y="355" width="285.7" height="15" rx="4" fill="url(#f16opt)"/>
-<text x="514" y="367" font-size="12" font-weight="600" fill="#bae6fd">79.37 (qual) / 73.53 (w3)</text>
-<rect x="220" y="374" width="288.7" height="17" rx="4" fill="url(#mxfp8)" opacity="0.4" filter="url(#glow)"/>
-<rect x="220" y="374" width="288.7" height="17" rx="4" fill="url(#mxfp8)"/>
-<text x="517" y="387" font-size="13" font-weight="700" fill="#f8fafc">80.19</text>
-<rect x="854" y="371" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.12" stroke="#22d3ee" stroke-opacity="0.5"/>
-<text x="891" y="386" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+22.6%</text>
+<!-- Group 4: 75.2K Context y=324..376 -->
+<text x="32" y="345" font-size="13.5" font-weight="600" fill="#e2e8f0">75.2K Context</text>
+<text x="32" y="361" font-size="11.5" fill="#94a3b8">95% of 80K, 3/3 needles</text>
+<rect x="220" y="324" width="235.5" height="14" rx="4" fill="#475569"/>
+<text x="464" y="335" font-size="12" fill="#94a3b8">65.42</text>
+<rect x="220" y="342" width="288.7" height="14" rx="4" fill="url(#f16opt)"/>
+<text x="517" y="353" font-size="12" font-weight="600" fill="#bae6fd">80.19 (w3 MXFP8)</text>
+<rect x="220" y="360" width="392.2" height="16" rx="4" fill="url(#w4)" opacity="0.48" filter="url(#glow)"/>
+<rect x="220" y="360" width="392.2" height="16" rx="4" fill="url(#w4)"/>
+<text x="620" y="372" font-size="13" font-weight="700" fill="#f8fafc">108.94 (unified d7-mma2)</text>
+<rect x="854" y="357" width="74" height="22" rx="11" fill="#22d3ee" fill-opacity="0.18" stroke="#22d3ee" stroke-opacity="0.75"/>
+<text x="891" y="372" font-size="12" font-weight="700" fill="#67e8f9" text-anchor="middle">+66.5%</text>
+
+<!-- Group 5: 150K & 181K Context y=390..410 -->
+<text x="32" y="405" font-size="13.5" font-weight="600" fill="#e9d5ff">150K / 181K Ctx</text>
+<rect x="220" y="392" width="256.4" height="16" rx="4" fill="url(#w4)"/>
+<text x="485" y="404" font-size="12.5" font-weight="700" fill="#f8fafc">71.23 (149.9K MXFP8) · 68.99 (181.2K rk8v4)</text>
+<rect x="854" y="389" width="74" height="22" rx="11" fill="#c084fc" fill-opacity="0.16" stroke="#c084fc" stroke-opacity="0.6"/>
+<text x="891" y="404" font-size="12" font-weight="700" fill="#e9d5ff" text-anchor="middle">3/3 PASS</text>
 
 <!-- Footer callout -->
-<text x="32" y="446" font-size="12.5" fill="#94a3b8">Extended MXFP8 / rk8v4 unlocks: <tspan fill="#67e8f9" font-weight="700">121.2K ctx @ 51.0 tok/s (3/3)</tspan> · <tspan fill="#c084fc" font-weight="700">148.6K ctx (rk8v4) @ 53.8 tok/s (3/3)</tspan> · <tspan fill="#fcd34d" font-weight="700">c=2 @ 140.9 agg tok/s</tspan></text>
+<text x="32" y="466" font-size="12.5" fill="#94a3b8">64.3K Code: <tspan fill="#67e8f9" font-weight="700">77.4 → 93.3 tok/s (+20.6%)</tspan> · 80K KV: <tspan fill="#6ee7b7" font-weight="700">3,326 → 1,926 MiB (−42.1%)</tspan> · c=2 @ 64K: <tspan fill="#fcd34d" font-weight="700">140.9 agg tok/s</tspan></text>
 </g>
 </svg>

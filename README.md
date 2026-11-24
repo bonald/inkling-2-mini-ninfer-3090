@@ -113,8 +113,8 @@ The port binds to localhost. The health check lists available models, so it keep
 | KV cache storage | `mxfp8` (`INKLING_KV_DTYPE`, Inkling 2's trained format; also supports `rk8v4`, `int8`, `rk4v4`, `bf16`/`fp16`) |
 | Inputs | Text and images, with structured output |
 | Default sampling | Temperature 1, top-k 0, top-p 1, min-p 0 |
-| Speculative decoding | DSpark, up to four adaptive draft tokens (`INKLING_DRAFT_TOKENS=4`, `--adaptive-mtp`), 32K compacted draft vocabulary (`assets/draft-vocab-32k.bin`) |
-| CUDA kernel optimizations | `INKLING_SHARED_VERIFY_ATTN=1` (shared-tile causal verify), `INKLING_FAST_DOWN=1` (4-row NVFP4 down), `INKLING_MMA_PREFILL=1` |
+| Speculative decoding | DSpark, up to seven adaptive draft tokens (`INKLING_DRAFT_TOKENS=7`, progressive `WidthPolicy`), 32K compacted draft vocabulary (`assets/draft-vocab-32k.bin`), MXFP8 full-attention drafter KV |
+| CUDA kernel optimizations | `INKLING_SHARED_VERIFY_ATTN=1` + `INKLING_VERIFY_MMA=2` (WMMA tensor-core shared-tile verify/DSpark attention), `INKLING_FAST_DOWN=1` (4-row NVFP4 down), `INKLING_MMA_PREFILL=1` |
 | Idle unload | 600 seconds |
 
 </details>
@@ -152,9 +152,9 @@ flowchart LR
 | **Grouped Q8 projections** | The attention path groups up to five Q8 projections in one CUDA launch. |
 | **Packed NVFP4 experts & 4-row `down` (`K3`)** | Lossless packed NVFP4 layout plus bit-exact 4-row-per-warp `packed_down_4row_kernel` (`INKLING_FAST_DOWN=1`) that caches activations in registers across 4 rows and eliminates `S=36` tail lane waste (**−32%** `nvDN` time: `4.26 → 2.88 ms`). |
 | **Compacted 32K DSpark drafter (`K2`)** | DSpark's 27 backbone projections and output head use Q4_0; `INKLING_DRAFT_VOCAB` compacts `proposal_head` (`260.5 → 42.7 MB`), Markov `table_m` (`102.4 → 16.8 MB`), `table_c`, and `draft_logits` to 32,768 frequency-ranked tokens (98.66% held-out coverage), cutting `head + Markov` by **3.4×** (`0.93 → 0.27 ms/round`) and saving **−0.29 GiB VRAM** while keeping full 200,058-token target verification exact. |
-| **Shared-tile verify attention (`K1-v2`)** | `attention_verify_kernel` (`INKLING_SHARED_VERIFY_ATTN=1`) assigns 1 warp per `(row, head)` (up to 24 warps) and shares each 16-key K/V tile once across all `t ≤ 8` verify rows on full-attention visits (**−39%** 28K `fullA`: `4.47 → 2.74 ms`). |
-| **MXFP8 & `rk8v4` KV planes** | Ported from upstream `ninfer-all` and wired into `kv_post`, `prompt_attention_mma`, `attention_kernel`, and `attention_verify_kernel`. `--kv-dtype mxfp8` (Inkling 2's trained KV format, 16.5 KiB/tok) cuts 80K KV memory **3,326 → 2,082 MiB (−37.4%)** and unlocks **131K context** or **`c=2` @ 64K** on 24 GB; `--kv-dtype rk8v4` (12.75 KiB/tok) cuts 80K KV to **1,781 MiB (−46.5%)** and unlocks **160K context**. |
-| **Adaptive proposals** | A per-request controller uses measured time and acceptance to adapt draft widths (`--draft-tokens 4 --adaptive-mtp`). |
+| **Shared-tile & WMMA tensor-core verify attention (`K1-v2` + `VERIFY_MMA`)** | `attention_verify_kernel` (`INKLING_SHARED_VERIFY_ATTN=1`) and `attention_verify_mma_kernel` (`INKLING_VERIFY_MMA=1|2`, WMMA `16×16×16` over 64-key tiles with compile-time `KvCoding` specialization) share each KV tile across all `t ≤ 8` verify rows and 3 query heads on both target full-attention visits and DSpark's full-attention layer. Lifts 39.3K decode to **128.92 tok/s (+48.2%)** and 75.2K decode to **108.94 tok/s (+66.5% vs F16 baseline)**. |
+| **MXFP8 & `rk8v4` KV planes (Target + DSpark)** | Ported from upstream `ninfer-all` and extended to DSpark's full-attention layer (`spark_rotate` + `plan_spark`) and `prompt_attention_mma` / `attention_verify_mma_kernel`. `--kv-dtype mxfp8` (Inkling 2's trained KV format, 16.5 KiB/tok target + 2.06 KiB/tok DSpark) cuts 80K KV memory **3,326 → 1,926 MiB (−42.1%)** and unlocks **163K context** or **`c=2` @ 64K** on 24 GB; `--kv-dtype rk8v4` unlocks **196K context** with vision + DSpark resident. |
+| **Progressive adaptive proposals (`WidthPolicy` 0..7)** | Unified `WidthPolicy` (`capacity=8`, `--draft-tokens 7`) runs on both greedy and sampled requests, warming widths `0..3` and progressively unlocking `4..7` on high-acceptance code, edits, and tool calls without wasting wide probes on prose. |
 | **Unchanged verification** | The original Q4 target always verifies proposals with all eight selected experts and the full 200,058-token vocabulary. |
 | **Tensor-core prefill** | `prompt_attention_mma` accelerates long inputs across both F16 and quantized (`mxfp8`/`rk8v4`/`int8`/`rk4v4`) KV planes. |
 | **KV-cache stability & TTFT fixes** | Eliminates host-cache pin leaks, redundant per-turn PCIe D2H copies (`61K TTFT: 799 → 318 ms`), and hardens reasoning-loop detection ([`patches/inkling2-stability-cache-ttft.patch`](patches/inkling2-stability-cache-ttft.patch)). |
@@ -199,21 +199,23 @@ All measurements below were taken on a single **RTX 3090 (24 GiB GDDR6X, driver 
 | Initial baseline (compositor GPU spin) | 3,326 MiB (F16) | 21.19 GiB | — | 84.66 tok/s | — | — | — | — |
 | Clean idle F16 baseline (`ctl`) | 3,326 MiB (F16) | 21.19 GiB (1.35 GiB) | 125.46 tok/s | 105.18 tok/s *(5-run med)* | 86.97 tok/s | 65.42 tok/s | — | 3/3 needles |
 | **F16 + K1-v2 / K2-32K / K3** *(lossless)* | 3,326 MiB (F16) | 20.90 GiB (1.64 GiB) | **139.57 tok/s** *(+11.3%)* | **115.75 tok/s** *(7-run med, +10.1%)* | **110.38 tok/s** *(qual, +26.9%)* | **79.37 tok/s** *(qual, +21.3%)* | 105.20 tok/s | **PASS (6/6, 3/3)** |
-| **MXFP8 + K1-v2 / K2-32K / K3** *(trained KV)* | **2,082 MiB (−37%)** | **19.72 GiB (2.83 GiB)** | **139.25 tok/s** *(+11.0%)* | **116.34 tok/s** *(+10.6%)* | 91.60 tok/s *(w3)* | **80.19 tok/s** *(+22.6%)* | **106.30 tok/s** | **PASS (6/6, 3/3)** |
+| **MXFP8 + K1-v2 / K2-32K / K3** *(Wave 3, scalar verify)* | 2,082 MiB (−37%) | 19.72 GiB (2.83 GiB) | **139.25 tok/s** *(+11.0%)* | **116.34 tok/s** *(+10.6%)* | 91.60 tok/s *(w3)* | 80.19 tok/s *(+22.6%)* | 106.30 tok/s | **PASS (6/6, 3/3)** |
+| **MXFP8 (T+DSpark) + WMMA Verify + WidthPolicy 7** *(Wave 4)* | **1,926 MiB (−42%)** | **19.54 GiB (3.04 GiB)** | 137.32 tok/s *(+9.5%)* | 119.90 *(code t=1)* | **128.92 tok/s** *(+48.2%)* | **108.94 tok/s** *(+66.5%)* | **108.30 tok/s** | **PASS (6/6, 3/3)** |
 | **`rk8v4` + K1-v2 / K2-32K / K3** *(K8/V4)* | **1,781 MiB (−46%)** | **19.43 GiB (3.12 GiB)** | **140.08 tok/s** *(+11.7%)* | 113.96 tok/s *(+8.3%)* | 82.91 tok/s *(w3)* | 73.23 tok/s *(+11.9%)* | 102.78 tok/s | **PASS (6/6, 3/3)** |
 
-> **Harness note:** `c1 Sampled` uses 6 diverse prompts (`max_tokens=512`, `temp=1.0`, `seed=42`, `reasoning_effort=none`, [`ledger.jsonl`](docs/rtx3090-optimization/ledger.jsonl)). `Short Greedy` (`512 tok`, `temp=0`), `39.3K` (`50%`), and `75.2K` (`95%`) use the control-bracketed long-context harness ([`qualification-report.json`](docs/rtx3090-optimization/qualification-report.json) & [`kv-planes-report.json`](docs/rtx3090-optimization/kv-planes-report.json)). In Wave 3 thermal steady-state (`f16_a / f16_b` bracketing MXFP8 and `rk8v4`), F16+K123 averaged `96.51 / 73.53 tok/s` at 39.3K / 75.2K (`f16_b`: `90.93 / 72.20 tok/s`), making MXFP8 **+9.1% to +11.1% faster than F16+K123 at 75.2K** while freeing **1.18 GiB VRAM**.
+> **Harness note:** `c1 Sampled` uses 6 diverse prompts (`max_tokens=512`, `temp=1.0`, `seed=42`, `reasoning_effort=none`, [`ledger.jsonl`](docs/rtx3090-optimization/ledger.jsonl)). `Short Greedy`, `39.3K` (`50%`), `64.3K Code`, and `75.2K` (`95%`) use the control-bracketed long-context harness ([`qualification-report.json`](docs/rtx3090-optimization/qualification-report.json), [`kv-planes-report.json`](docs/rtx3090-optimization/kv-planes-report.json), [`maya-port-report.json`](docs/rtx3090-optimization/maya-port-report.json)). In Wave 4 (`VERIFY_MMA=2` + DSpark MXFP8 KV + `--draft-tokens 7`), **64.3K code decode** jumped **`77.39 → 93.33 tok/s` (+20.6%)**, **39.3K decode** hit **`115.69–128.92 tok/s`**, and **75.2K decode** hit **`108.94 tok/s` (+66.5% vs clean F16 baseline)** — all with **3/3 needle retrieval** and **6/6 acceptance gates PASS**.
 
 ### 3. Unlocked Extended Context & Concurrency on 24 GiB VRAM
 
 <p align="center">
-  <img src="docs/assets/rtx3090-kv-vram-capacity.svg" alt="VRAM footprint and unlocked context capacity up to 160K and c=2 on a single 24 GiB RTX 3090" width="100%">
+  <img src="docs/assets/rtx3090-kv-vram-capacity.svg" alt="VRAM footprint and unlocked context capacity up to 196K and c=2 on a single 24 GiB RTX 3090" width="100%">
 </p>
 
 | Extended Configuration (Single RTX 3090, 24 GiB, Vision + DSpark Resident) | KV Cache | Peak VRAM | Free VRAM | Measured Prompt | Prefill | Decode / Aggregate | Needle Retrieval |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| **MXFP8 @ 131,072 ctx (`c=1`)** | 3,066 MiB | **20.69 GiB** | **1.85 GiB** | 121,222 tok | 825.4 tok/s | **51.01 tok/s** | **3/3 PASS** |
-| **`rk8v4` @ 163,840 ctx (`c=1`)** | 3,121 MiB | **20.74 GiB** | **1.81 GiB** | 148,561 tok | 725.1 tok/s | **53.84 tok/s** | **3/3 PASS** |
+| **MXFP8 @ 131,072 ctx (`c=1`, Wave 3 scalar)** | 3,066 MiB | **20.69 GiB** | **1.85 GiB** | 121,222 tok | 825.4 tok/s | 51.01 tok/s | **3/3 PASS** |
+| **MXFP8 (T+DSpark) @ 163,840 ctx (`c=1`, Wave 4 WMMA)** | 3,411 MiB | **21.05 GiB** | **1.21 GiB** | **149,940 tok** | 756.8 tok/s | **71.23 tok/s** | **3/3 PASS** |
+| **`rk8v4` (T+DSpark) @ 196,608 ctx (`c=1`, Wave 4 WMMA)** | 3,284 MiB | **20.93 GiB** | **1.13 GiB** | **181,225 tok** | 677.9 tok/s | **68.99 tok/s** | **3/3 PASS** |
 | **MXFP8 @ 65,536 ctx (`c=2` concurrent)** | 3,495 MiB | **21.09 GiB** | **1.46 GiB** | 2 × 512 tok | — | **140.87 agg tok/s** *(71.7 + 72.8)* | — |
 
 ### 4. Per-Stage Kernel Speedups, Draft Vocab Sweep & Rejected Levers

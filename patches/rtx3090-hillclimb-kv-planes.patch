@@ -94,7 +94,7 @@ index 76a3148..2648a56 100644
      throw std::invalid_argument("gemma4: unknown KV-cache storage");
  }
 diff --git a/src/models/inkling2/executor.cpp b/src/models/inkling2/executor.cpp
-index 99b4fa7..eec3616 100644
+index 99b4fa7..8ef4319 100644
 --- a/src/models/inkling2/executor.cpp
 +++ b/src/models/inkling2/executor.cpp
 @@ -15,6 +15,7 @@
@@ -283,7 +283,7 @@ index 99b4fa7..eec3616 100644
              }
              if (!p.full && options.checkpoints) {
                  for (int c = 0; c < 2; ++c) {
-@@ -472,8 +563,14 @@ struct Executor::Impl {
+@@ -472,14 +563,27 @@ struct Executor::Impl {
          if (options.dspark) { plan_spark(device_id, sequences); }
          for (VisitPlan& p : visits) {
              if (!p.full) { continue; }
@@ -300,7 +300,111 @@ index 99b4fa7..eec3616 100644
          }
          if (spark) {
              for (SparkLayer& l : spark->layers) {
-@@ -869,13 +966,14 @@ struct Executor::Impl {
+                 if (!l.cache.full) { continue; }
+-                sequence_areas.push_back(&l.cache.k);
+-                sequence_areas.push_back(&l.cache.v);
++                if (l.cache.k_codes.p != nullptr) {
++                    for (KvArea* area :
++                         {&l.cache.k_codes, &l.cache.k_scales, &l.cache.v_codes, &l.cache.v_scales}) {
++                        sequence_areas.push_back(area);
++                    }
++                } else {
++                    sequence_areas.push_back(&l.cache.k);
++                    sequence_areas.push_back(&l.cache.v);
++                }
+             }
+         }
+         kv_fixed = kv_bytes;
+@@ -759,20 +863,50 @@ struct Executor::Impl {
+ 
+     struct Call;
+ 
++    [[nodiscard]] bool spark_mxfp8() const noexcept {
++        static const bool disable = std::getenv("INKLING_DRAFT_KV_F16") != nullptr;
++        return kvfmt.quantized() && !disable;
++    }
++
++    [[nodiscard]] KvPlaneView spark_plane(const KvArea& codes, const KvArea& scales,
++                                          int slots) const noexcept {
++        KvPlaneView plane;
++        plane.codes      = static_cast<std::uint8_t*>(codes.p);
++        plane.scales     = static_cast<std::uint8_t*>(scales.p);
++        plane.code_row   = kv_code_bytes(KvCoding::Mxfp8);
++        plane.scale_row  = kv_scale_bytes(KvCoding::Mxfp8);
++        plane.code_head  = std::int64_t(slots) * plane.code_row;
++        plane.scale_head = std::int64_t(slots) * plane.scale_row;
++        plane.code_seq   = plane.code_head * kv_heads;
++        plane.scale_seq  = plane.scale_head * kv_heads;
++        plane.coding     = KvCoding::Mxfp8;
++        return plane;
++    }
++
+     // A drafter layer's caches: a sliding layer's ring (the window and kR slots past it, like the
+-    // target's) with its checkpoint, a full layer's every position.
++    // target's) with its checkpoint, a full layer's every position (MXFP8 when quantized).
+     [[nodiscard]] std::size_t spark_planned_bytes() const {
+         const DSparkConfig& dc = *model.dspark_config();
+-        const std::size_t kv = 2 * std::size_t(dc.num_key_value_heads) * dc.head_dim * sizeof(__half) *
+-                               options.sequences;
++        const std::size_t kv_f16 =
++            2 * std::size_t(dc.num_key_value_heads) * dc.head_dim * sizeof(__half) *
++            options.sequences;
++        const std::size_t kv_full =
++            spark_mxfp8()
++                ? 2 * std::size_t(dc.num_key_value_heads) *
++                      (std::size_t(kv_code_bytes(KvCoding::Mxfp8)) +
++                       std::size_t(kv_scale_bytes(KvCoding::Mxfp8))) *
++                      options.sequences
++                : kv_f16;
+         std::size_t bytes = 0;
+         for (const bool full : dc.full_attention) {
+-            bytes += full ? std::size_t(round_up(options.max_context + 1, 256)) * kv
+-                          : (options.checkpoints ? 2 : 1) * std::size_t(ring) * kv;
++            bytes += full ? std::size_t(round_up(options.max_context + 1, 256)) * kv_full
++                          : (options.checkpoints ? 2 : 1) * std::size_t(ring) * kv_f16;
+         }
+         bytes += (options.checkpoints ? 2 : 1) * std::size_t(options.sequences) * kR *
+                  config.hidden_size * 4;
+-        bytes += std::size_t(config.unpadded_vocab_size) * (dc.markov_rank * 2 + 4);
++        const std::size_t pvocab =
++            proposal_vocab_size > 0 ? std::size_t(proposal_vocab_size) : std::size_t(config.unpadded_vocab_size);
++        bytes += pvocab * (dc.markov_rank * 2 + 4);
+         return bytes;
+     }
+ 
+@@ -847,11 +981,26 @@ struct Executor::Impl {
+             c.ring         = c.full ? 0 : ring;
+             c.head_stride  = std::int64_t(c.slots) * kD;
+             c.seq_stride   = c.head_stride * kv_heads;
+-            for (KvArea* area : {&c.k, &c.v}) {
+-                *area = KvArea(std::size_t(sequences), kv_heads,
+-                               std::size_t(c.head_stride) * sizeof(__half), row_f16,
+-                               growing && c.full, device_id);
+-                kv_bytes += area->bytes;
++            if (c.full && spark_mxfp8()) {
++                const std::size_t code  = std::size_t(kv_code_bytes(KvCoding::Mxfp8));
++                const std::size_t scale = std::size_t(kv_scale_bytes(KvCoding::Mxfp8));
++                const bool grows        = growing && c.full;
++                c.k_codes  = KvArea(std::size_t(sequences), kv_heads, std::size_t(c.slots) * code,
++                                    code, grows, device_id);
++                c.k_scales = KvArea(std::size_t(sequences), kv_heads, std::size_t(c.slots) * scale,
++                                    scale, grows, device_id);
++                c.v_codes  = KvArea(std::size_t(sequences), kv_heads, std::size_t(c.slots) * code,
++                                    code, grows, device_id);
++                c.v_scales = KvArea(std::size_t(sequences), kv_heads, std::size_t(c.slots) * scale,
++                                    scale, grows, device_id);
++                kv_bytes += c.k_codes.bytes + c.k_scales.bytes + c.v_codes.bytes + c.v_scales.bytes;
++            } else {
++                for (KvArea* area : {&c.k, &c.v}) {
++                    *area = KvArea(std::size_t(sequences), kv_heads,
++                                   std::size_t(c.head_stride) * sizeof(__half), row_f16,
++                                   growing && c.full, device_id);
++                    kv_bytes += area->bytes;
++                }
+             }
+             if (!c.full && options.checkpoints) {
+                 for (int k = 0; k < 2; ++k) {
+@@ -869,13 +1018,14 @@ struct Executor::Impl {
              d->contexts_kept = DeviceBuffer(contexts);
              d->bytes += contexts;
          }
@@ -318,7 +422,7 @@ index 99b4fa7..eec3616 100644
          d->drafts  = DeviceBuffer(std::size_t(d->block) * 4);
          d->confidence = DeviceBuffer(std::size_t(d->block) * 4);
          d->bytes += d->table_m.bytes + d->table_c.bytes;
-@@ -890,6 +988,7 @@ struct Executor::Impl {
+@@ -890,6 +1040,7 @@ struct Executor::Impl {
      void prepare_spark() {
          Spark& d = *spark;
          if (d.prepared) { return; }
@@ -326,7 +430,7 @@ index 99b4fa7..eec3616 100644
          const int rank = int(d.config->markov_rank), cols = rank + 1;
          workspace->reset();
          auto scope   = workspace->scope();
-@@ -903,8 +1002,8 @@ struct Executor::Impl {
+@@ -903,8 +1054,8 @@ struct Executor::Impl {
          auto* rows = static_cast<float*>(workspace->alloc_bytes(std::size_t(chunk) * hidden * 4).data);
          auto* out  = static_cast<float*>(workspace->alloc_bytes(std::size_t(chunk) * cols * 4).data);
          std::vector<std::int32_t> host(chunk);
@@ -337,7 +441,51 @@ index 99b4fa7..eec3616 100644
              for (int i = 0; i < n; ++i) { host[i] = first + i; }
              CUDA_CHECK(cudaMemcpyAsync(ids, host.data(), std::size_t(n) * 4, cudaMemcpyHostToDevice,
                                         stream));
-@@ -1090,18 +1189,19 @@ struct Executor::Impl {
+@@ -980,8 +1131,13 @@ struct Executor::Impl {
+             ra.norm        = layer.context_key_norm;
+             ra.eps         = dc.rms_norm_eps;
+             ra.theta       = dc.rope_theta;
+-            ra.k_cache     = static_cast<__half*>(layer.cache.k.p);
+-            ra.v_cache     = static_cast<__half*>(layer.cache.v.p);
++            if (layer.cache.k_codes.p != nullptr) {
++                ra.k_plane = spark_plane(layer.cache.k_codes, layer.cache.k_scales, layer.cache.slots);
++                ra.v_plane = spark_plane(layer.cache.v_codes, layer.cache.v_scales, layer.cache.slots);
++            } else {
++                ra.k_cache = static_cast<__half*>(layer.cache.k.p);
++                ra.v_cache = static_cast<__half*>(layer.cache.v.p);
++            }
+             ra.seq_stride  = layer.cache.seq_stride;
+             ra.head_stride = layer.cache.head_stride;
+             ra.ring        = layer.cache.ring;
+@@ -1049,8 +1205,16 @@ struct Executor::Impl {
+             ra.stride      = 2 * kvd;
+             ra.heads       = kv_heads;
+             ra.norm        = l.key_norm;
+-            ra.k_cache     = static_cast<__half*>(l.cache.k.p);
+-            ra.v_cache     = static_cast<__half*>(l.cache.v.p);
++            KvPlaneView sk_plane, sv_plane;
++            if (l.cache.k_codes.p != nullptr) {
++                sk_plane   = spark_plane(l.cache.k_codes, l.cache.k_scales, l.cache.slots);
++                sv_plane   = spark_plane(l.cache.v_codes, l.cache.v_scales, l.cache.slots);
++                ra.k_plane = sk_plane;
++                ra.v_plane = sv_plane;
++            } else {
++                ra.k_cache = static_cast<__half*>(l.cache.k.p);
++                ra.v_cache = static_cast<__half*>(l.cache.v.p);
++            }
+             ra.seq_stride  = l.cache.seq_stride;
+             ra.head_stride = l.cache.head_stride;
+             ra.ring        = l.cache.ring;
+@@ -1060,6 +1224,8 @@ struct Executor::Impl {
+             aa.q           = qv;
+             aa.k_cache     = static_cast<const __half*>(l.cache.k.p);
+             aa.v_cache     = static_cast<const __half*>(l.cache.v.p);
++            aa.k_plane     = sk_plane;
++            aa.v_plane     = sv_plane;
+             aa.seq_stride  = l.cache.seq_stride;
+             aa.head_stride = l.cache.head_stride;
+             aa.ring        = l.cache.ring;
+@@ -1090,18 +1256,19 @@ struct Executor::Impl {
          auto* final_rows = static_cast<float*>(workspace->alloc_bytes(std::size_t(b) * hidden * 4).data);
  
          // The head's products of the rows the k steps read (1..k), in their rows of `base`.
@@ -361,7 +509,7 @@ index 99b4fa7..eec3616 100644
          sa.weight       = d.joint;
          sa.bias         = d.joint_bias;
          sa.embed        = d.markov_embed;
-@@ -1112,10 +1212,11 @@ struct Executor::Impl {
+@@ -1112,10 +1279,11 @@ struct Executor::Impl {
          sa.positions    = rows.positions;
          sa.sequences    = rows.sequences;
          sa.base         = base;
@@ -375,7 +523,7 @@ index 99b4fa7..eec3616 100644
          sa.hidden_size  = hidden;
          sa.cap          = config.logit_softcap;
          sa.state        = static_cast<float*>(d.state.p);
-@@ -1124,12 +1225,12 @@ struct Executor::Impl {
+@@ -1124,12 +1292,12 @@ struct Executor::Impl {
          sa.confidence   = static_cast<float*>(d.confidence.p);
          sa.joint        = scratch;
          sa.logits       = scratch + 3 * dc.markov_rank;
@@ -390,7 +538,7 @@ index 99b4fa7..eec3616 100644
              }
              kernels::spark_step(sa, stream);
          }
-@@ -1433,6 +1534,7 @@ struct Executor::Impl {
+@@ -1433,6 +1601,7 @@ struct Executor::Impl {
          add(t * query_heads * 16 * 4);    // r
          add(t * q_floats * 2);            // attention out BF16
          add(t * h * 4);                   // output product
@@ -398,7 +546,7 @@ index 99b4fa7..eec3616 100644
          // Controllers of three inputs: [rms x; rms m], the rank's hidden state, forget and gain.
          add(3 * t * 2 * h * 4);
          add(3 * t * rank * 4);
-@@ -2121,7 +2223,26 @@ struct Executor::Impl {
+@@ -2121,7 +2290,26 @@ struct Executor::Impl {
          // there, and the window that ends the chunk's kept rows goes back).
          const std::int64_t stage_stride = std::int64_t(prefill_ring) * kD;
          const std::int64_t seq_offset   = std::int64_t(c.sequence) * vp.seq_stride;
@@ -426,7 +574,7 @@ index 99b4fa7..eec3616 100644
          kernels::RingCopyArgs keep;
          keep.kv_heads = kv_heads;
          kernels::KvArgs ka;
-@@ -2139,7 +2260,18 @@ struct Executor::Impl {
+@@ -2139,7 +2327,18 @@ struct Executor::Impl {
          ka.kv_heads    = kv_heads;
          ka.qk_clip     = config.qk_clip;
          ka.eps         = eps;
@@ -446,7 +594,7 @@ index 99b4fa7..eec3616 100644
              keep.src_k           = static_cast<const __half*>(vp.k.p) + seq_offset;
              keep.src_v           = static_cast<const __half*>(vp.v.p) + seq_offset;
              keep.dst_k           = static_cast<__half*>(staging_k.p);
-@@ -2164,6 +2296,19 @@ struct Executor::Impl {
+@@ -2164,6 +2363,19 @@ struct Executor::Impl {
              ka.ring        = vp.ring;
          }
          kernels::kv_post(ka, stream);
@@ -466,7 +614,7 @@ index 99b4fa7..eec3616 100644
          if (c.chunk) {
              const auto [begin, end] = kept_history(c);
              kernels::keep_history(kv, 2 * kvd, 2 * kvd, c.rows.positions, begin, end, site(v, 0),
-@@ -2188,6 +2333,8 @@ struct Executor::Impl {
+@@ -2188,6 +2400,8 @@ struct Executor::Impl {
              aa.extent      = int(lp.full ? config.relative_extent : config.sliding_window);
              aa.k_cache     = ka.k_cache;
              aa.v_cache     = ka.v_cache;
@@ -475,7 +623,7 @@ index 99b4fa7..eec3616 100644
              aa.seq_stride  = ka.seq_stride;
              aa.head_stride = ka.head_stride;
              aa.ring        = ka.ring;
-@@ -2196,6 +2343,12 @@ struct Executor::Impl {
+@@ -2196,6 +2410,12 @@ struct Executor::Impl {
              aa.kv_heads    = kv_heads;
              aa.scale       = 1.0f / std::sqrt(float(kD));
              aa.splits      = c.chunk ? 1 : (lp.full ? decode_splits_full : decode_splits_sliding);
@@ -488,7 +636,7 @@ index 99b4fa7..eec3616 100644
              if (!c.chunk && aa.splits > 1) {
                  aa.partial = static_cast<float*>(workspace->alloc_bytes(
                      kernels::attention_workspace_floats(t, query_heads, aa.splits) * 4).data);
-@@ -2879,7 +3032,11 @@ struct Executor::Impl {
+@@ -2879,7 +3099,11 @@ struct Executor::Impl {
      [[nodiscard]] std::uint64_t image_bytes(std::uint32_t position) const {
          std::uint64_t bytes = sequence_history_bytes();
          for (const VisitPlan* p : cache_plans()) {
@@ -501,7 +649,7 @@ index 99b4fa7..eec3616 100644
                  bytes += 2 * std::uint64_t(kv_heads) * position * kD * sizeof(__half);
              } else {
                  for (const auto& r : ring_buffers(*p, 0)) { bytes += r.second; }
-@@ -2912,6 +3069,18 @@ struct Executor::Impl {
+@@ -2912,6 +3136,18 @@ struct Executor::Impl {
          const std::size_t head_bytes = std::size_t(global_slots) * kD * sizeof(__half);
          for (const VisitPlan* p : cache_plans()) {
              if (p->full) {
@@ -520,7 +668,7 @@ index 99b4fa7..eec3616 100644
                  for (const KvArea* area : {&p->k, &p->v}) {
                      auto* base = static_cast<std::uint8_t*>(area->p) + sequence * head_bytes * kv_heads;
                      for (int h = 0; h < kv_heads; ++h) {
-@@ -3088,6 +3257,12 @@ Tensor Executor::logits(std::uint32_t rows) const {
+@@ -3088,6 +3324,12 @@ Tensor Executor::logits(std::uint32_t rows) const {
  const float* Executor::proposal_logits() const noexcept {
      return impl_->spark ? static_cast<const float*>(impl_->spark->draft_logits.p) : nullptr;
  }
@@ -563,7 +711,7 @@ index 1668f66..67e1f91 100644
      void snapshot(std::uint32_t sequence, SequenceSnapshot& out);
      void restore(std::uint32_t sequence, const SequenceSnapshot& from);
 diff --git a/src/models/inkling2/kernels.cu b/src/models/inkling2/kernels.cu
-index e6099ea..bcd1af7 100644
+index e6099ea..f610ecf 100644
 --- a/src/models/inkling2/kernels.cu
 +++ b/src/models/inkling2/kernels.cu
 @@ -3,6 +3,7 @@
@@ -624,7 +772,40 @@ index e6099ea..bcd1af7 100644
      if (a.keep) {
          const int p = a.rows.positions[t];
          history_slot(a.k_history, sequence, p)[c] = a.kv[std::int64_t(t) * a.kv_stride + c];
-@@ -808,12 +819,28 @@ __global__ __launch_bounds__(128) void prompt_attention_mma(AttentionArgs a) {
+@@ -769,8 +780,32 @@ __device__ __forceinline__ void key_range(const AttentionArgs& a, int t0, int t1
+     }
+ }
+ 
++// Compile-time specialized 8-half KV chunk load (eliminates runtime coding switch in hot MMA loops).
++// KvCoding::Fp8Row is used as a sentinel for runtime dispatch on less common codings (Int8G64, Lloyd4).
++template <KvCoding C>
++__device__ __forceinline__ uint4 load_kv_word(const KvPlaneView& plane, const __half* cache,
++                                              std::int64_t base, int sequence, int kv_head,
++                                              int slot, int c) {
++    if constexpr (C == KvCoding::F16) {
++        return *reinterpret_cast<const uint4*>(cache + base + std::int64_t(slot) * kD + c * 8);
++    } else {
++        const std::int64_t codes_row = std::int64_t(sequence) * plane.code_seq +
++                                       std::int64_t(kv_head) * plane.code_head +
++                                       std::int64_t(slot) * plane.code_row;
++        const std::int64_t scales_row = std::int64_t(sequence) * plane.scale_seq +
++                                        std::int64_t(kv_head) * plane.scale_head +
++                                        std::int64_t(slot) * plane.scale_row;
++        if constexpr (C == KvCoding::Fp8Row) {
++            return chunk_word(plane, plane.codes + codes_row, plane.scales + scales_row, c);
++        } else {
++            return kv::chunk_word<C>(plane.codes + codes_row, plane.scales + scales_row, c);
++        }
++    }
++}
++
+ // Sixteen queries share each tile of 64 keys. Four warps form the score tiles, then
+ // multiply the normalized weights by the cached values. The row maxima and sums stay FP32.
++template <KvCoding kKC, KvCoding kVC>
+ __global__ __launch_bounds__(128) void prompt_attention_mma(AttentionArgs a) {
+ #if __CUDA_ARCH__ >= 800
+     using namespace nvcuda::wmma;
+@@ -808,12 +843,14 @@ __global__ __launch_bounds__(128) void prompt_attention_mma(AttentionArgs a) {
      for (int start = first; start <= last; start += keys) {
          __syncthreads();
          for (int i = tid; i < keys * dim / 8; i += 128) {
@@ -639,27 +820,13 @@ index e6099ea..bcd1af7 100644
 +            uint4 word = make_uint4(0, 0, 0, 0);
 +            if (p <= last) {
 +                const int slot = a.ring ? p % a.ring : p;
-+                if (a.k_plane.coding != KvCoding::F16) {
-+                    const std::int64_t codes_row =
-+                        std::int64_t(a.rows.sequence) * a.k_plane.code_seq +
-+                        std::int64_t(kvh) * a.k_plane.code_head +
-+                        std::int64_t(slot) * a.k_plane.code_row;
-+                    const std::int64_t scales_row =
-+                        std::int64_t(a.rows.sequence) * a.k_plane.scale_seq +
-+                        std::int64_t(kvh) * a.k_plane.scale_head +
-+                        std::int64_t(slot) * a.k_plane.scale_row;
-+                    word = chunk_word(a.k_plane, a.k_plane.codes + codes_row,
-+                                      a.k_plane.scales + scales_row, c);
-+                } else {
-+                    word = *reinterpret_cast<const uint4*>(
-+                        a.k_cache + base + std::int64_t(slot) * dim + c * 8);
-+                }
++                word = load_kv_word<kKC>(a.k_plane, a.k_cache, base, a.rows.sequence, kvh, slot, c);
 +            }
 +            *reinterpret_cast<uint4*>(&cache[r][c * 8]) = word;
          }
          __syncthreads();
          fragment<accumulator, 16, 16, 16, float> dots;
-@@ -866,12 +893,28 @@ __global__ __launch_bounds__(128) void prompt_attention_mma(AttentionArgs a) {
+@@ -866,12 +903,14 @@ __global__ __launch_bounds__(128) void prompt_attention_mma(AttentionArgs a) {
              denom[row]    = denom[row] * old + sum;
          }
          for (int i = tid; i < keys * dim / 8; i += 128) {
@@ -674,27 +841,258 @@ index e6099ea..bcd1af7 100644
 +            uint4 word = make_uint4(0, 0, 0, 0);
 +            if (p <= last) {
 +                const int slot = a.ring ? p % a.ring : p;
-+                if (a.v_plane.coding != KvCoding::F16) {
-+                    const std::int64_t codes_row =
-+                        std::int64_t(a.rows.sequence) * a.v_plane.code_seq +
-+                        std::int64_t(kvh) * a.v_plane.code_head +
-+                        std::int64_t(slot) * a.v_plane.code_row;
-+                    const std::int64_t scales_row =
-+                        std::int64_t(a.rows.sequence) * a.v_plane.scale_seq +
-+                        std::int64_t(kvh) * a.v_plane.scale_head +
-+                        std::int64_t(slot) * a.v_plane.scale_row;
-+                    word = chunk_word(a.v_plane, a.v_plane.codes + codes_row,
-+                                      a.v_plane.scales + scales_row, c);
-+                } else {
-+                    word = *reinterpret_cast<const uint4*>(
-+                        a.v_cache + base + std::int64_t(slot) * dim + c * 8);
-+                }
++                word = load_kv_word<kVC>(a.v_plane, a.v_cache, base, a.rows.sequence, kvh, slot, c);
 +            }
 +            *reinterpret_cast<uint4*>(&cache[r][c * 8]) = word;
          }
          __syncthreads();
  #    pragma unroll
-@@ -933,7 +976,7 @@ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(Atten
+@@ -918,6 +957,244 @@ __global__ __launch_bounds__(128) void prompt_attention_mma(AttentionArgs a) {
+ #endif
+ }
+ 
++// Tensor-core shared-tile multi-row decode/verify/DSpark attention:
++// Block (0, kv_head, split) of 128 threads (4 warps) computes all Q = tokens * group queries
++// (kQTiles = 1 for Q <= 16, kQTiles = 2 for 17 <= Q <= 32, e.g. DSpark 8*3 = 24 or target verify)
++// over 64-key tiles decoded once into shared memory with WMMA 16x16x16 FP16->FP32 tensor cores.
++template <int kQTiles, KvCoding kKC, KvCoding kVC>
++__global__ __launch_bounds__(128) void attention_verify_mma_kernel(AttentionArgs a) {
++#if __CUDA_ARCH__ >= 800
++    using namespace nvcuda::wmma;
++    constexpr int kQRows = kQTiles * 16;
++    constexpr int kKeys  = 64;
++    constexpr int dim    = 128;
++
++    const int group   = a.query_heads / a.kv_heads;
++    const int kv_head = int(blockIdx.y);
++    const int split   = int(blockIdx.z);
++    const int Q       = a.rows.tokens * group;
++    int lo = 0, hi = 0;
++    key_range(a, 0, a.rows.tokens, lo, hi);
++    const int keys   = hi + 1 - lo;
++    const int active = active_splits(keys, a.splits);
++    if (split >= active) { return; }
++    const int chunk = ((keys + active - 1) / active + kTile - 1) / kTile * kTile;
++    const int begin = lo + split * chunk;
++    const int end   = min(hi + 1, begin + chunk);
++
++    __shared__ __align__(32) __half query[kQRows][dim];
++    __shared__ __align__(32) __half cache[kKeys][dim];
++    __shared__ __align__(32) __half probabilities[kQRows][kKeys];
++    __shared__ __align__(32) float tile[kQRows][dim];
++    __shared__ float maxima[kQRows], denom[kQRows], previous[kQRows];
++
++    const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
++    const int row_local = tid >> 3, sub = tid & 7;
++    const int sequence  = row_sequence(a.rows, 0);
++    const std::int64_t base =
++        std::int64_t(sequence) * a.seq_stride + std::int64_t(kv_head) * a.head_stride;
++
++    float output[kQTiles][dim / 8];
++#    pragma unroll
++    for (int m = 0; m < kQTiles; ++m) {
++        const int q_idx = m * 16 + row_local;
++        const bool valid = q_idx < Q;
++        const int t_row = valid ? (q_idx / group) : 0;
++        const int head  = valid ? (kv_head * group + (q_idx % group)) : 0;
++        const std::int64_t qhead = std::int64_t(t_row) * a.query_heads + head;
++#    pragma unroll
++        for (int n = 0; n < dim / 8; ++n) {
++            const int d = 8 * n + sub;
++            query[q_idx][d] = __float2half_rn(valid ? a.q[qhead * dim + d] * a.scale : 0.0f);
++            output[m][n]    = 0.0f;
++        }
++        if (sub == 0) {
++            maxima[q_idx] = -INFINITY;
++            denom[q_idx]  = 0.0f;
++        }
++    }
++    __syncthreads();
++
++    for (int start = begin; start < end; start += kKeys) {
++        __syncthreads();
++        for (int i = tid; i < kKeys * dim / 8; i += 128) {
++            const int r = i / (dim / 8), c = i % (dim / 8);
++            const int p = start + r;
++            uint4 word = make_uint4(0, 0, 0, 0);
++            if (p < end) {
++                const int slot = a.ring ? p % a.ring : p;
++                word = load_kv_word<kKC>(a.k_plane, a.k_cache, base, sequence, kv_head, slot, c);
++            }
++            *reinterpret_cast<uint4*>(&cache[r][c * 8]) = word;
++        }
++        __syncthreads();
++
++#    pragma unroll
++        for (int m = 0; m < kQTiles; ++m) {
++            fragment<accumulator, 16, 16, 16, float> dots;
++            fill_fragment(dots, 0.0f);
++#    pragma unroll
++            for (int part = 0; part < dim / 16; ++part) {
++                fragment<matrix_a, 16, 16, 16, __half, row_major> qf;
++                fragment<matrix_b, 16, 16, 16, __half, col_major> kf;
++                load_matrix_sync(qf, &query[m * 16][16 * part], dim);
++                load_matrix_sync(kf, &cache[warp * 16][16 * part], dim);
++                mma_sync(dots, qf, kf, dots);
++            }
++            store_matrix_sync(&tile[m * 16][16 * warp], dots, dim, mem_row_major);
++        }
++        __syncthreads();
++
++#    pragma unroll
++        for (int m = 0; m < kQTiles; ++m) {
++            const int q_idx  = m * 16 + row_local;
++            const bool valid = q_idx < Q;
++            const int t_row  = valid ? (q_idx / group) : 0;
++            const int head   = valid ? (kv_head * group + (q_idx % group)) : 0;
++            const std::int64_t qhead = std::int64_t(t_row) * a.query_heads + head;
++            float scores[kKeys / 8], top = maxima[q_idx];
++#    pragma unroll
++            for (int n = 0; n < kKeys / 8; ++n) {
++                const int col = 8 * n + sub, p = start + col;
++                int distance = 0;
++                float score  = -INFINITY;
++                if (valid && p < end && (a.uniform || sees(a, t_row, p, distance))) {
++                    score = tile[q_idx][col];
++                    if (!a.uniform && a.table && distance < a.extent) {
++                        const float* rel   = a.r + qhead * kRel;
++                        const float* slope = a.table + std::int64_t(distance) * kRel;
++                        float bias         = 0.0f;
++#    pragma unroll
++                        for (int j = 0; j < kRel; ++j) bias = fmaf(rel[j], slope[j], bias);
++                        score += bias;
++                    }
++                }
++                scores[n] = score;
++                top       = fmaxf(top, score);
++            }
++#    pragma unroll
++            for (int offset = 4; offset; offset >>= 1)
++                top = fmaxf(top, __shfl_xor_sync(0xffffffff, top, offset, 8));
++            const float old = (isfinite(maxima[q_idx]) && isfinite(top))
++                                  ? expf(maxima[q_idx] - top)
++                                  : 0.0f;
++            float sum = 0.0f;
++#    pragma unroll
++            for (int n = 0; n < kKeys / 8; ++n) {
++                const float p = (isfinite(scores[n]) && isfinite(top))
++                                    ? expf(scores[n] - top)
++                                    : 0.0f;
++                probabilities[q_idx][8 * n + sub] = __float2half_rn(p);
++                sum += p;
++            }
++#    pragma unroll
++            for (int offset = 4; offset; offset >>= 1)
++                sum += __shfl_xor_sync(0xffffffff, sum, offset, 8);
++            if (sub == 0) {
++                previous[q_idx] = old;
++                maxima[q_idx]   = top;
++                denom[q_idx]    = denom[q_idx] * old + sum;
++            }
++        }
++
++        for (int i = tid; i < kKeys * dim / 8; i += 128) {
++            const int r = i / (dim / 8), c = i % (dim / 8);
++            const int p = start + r;
++            uint4 word = make_uint4(0, 0, 0, 0);
++            if (p < end) {
++                const int slot = a.ring ? p % a.ring : p;
++                word = load_kv_word<kVC>(a.v_plane, a.v_cache, base, sequence, kv_head, slot, c);
++            }
++            *reinterpret_cast<uint4*>(&cache[r][c * 8]) = word;
++        }
++        __syncthreads();
++
++#    pragma unroll
++        for (int m = 0; m < kQTiles; ++m) {
++#    pragma unroll
++            for (int side = 0; side < 2; ++side) {
++                const int channel = warp * 32 + side * 16;
++                fragment<accumulator, 16, 16, 16, float> product;
++                fill_fragment(product, 0.0f);
++#    pragma unroll
++                for (int n = 0; n < kKeys; n += 16) {
++                    fragment<matrix_a, 16, 16, 16, __half, row_major> prob;
++                    fragment<matrix_b, 16, 16, 16, __half, row_major> value;
++                    load_matrix_sync(prob, &probabilities[m * 16][n], kKeys);
++                    load_matrix_sync(value, &cache[n][channel], dim);
++                    mma_sync(product, prob, value, product);
++                }
++                store_matrix_sync(&tile[m * 16][channel], product, dim, mem_row_major);
++            }
++        }
++        __syncthreads();
++
++#    pragma unroll
++        for (int m = 0; m < kQTiles; ++m) {
++            const int q_idx = m * 16 + row_local;
++            const float pv  = previous[q_idx];
++#    pragma unroll
++            for (int n = 0; n < dim / 8; ++n)
++                output[m][n] = fmaf(output[m][n], pv, tile[q_idx][8 * n + sub]);
++        }
++    }
++
++    if (a.splits > 1) {
++        const std::int64_t total_rows = std::int64_t(a.rows.tokens) * a.query_heads * a.splits;
++#    pragma unroll
++        for (int m = 0; m < kQTiles; ++m) {
++            const int q_idx = m * 16 + row_local;
++            if (q_idx >= Q) { continue; }
++            const int t_row = q_idx / group;
++            const int head  = kv_head * group + (q_idx % group);
++            const std::int64_t prow = (std::int64_t(t_row) * a.query_heads + head) * a.splits + split;
++#    pragma unroll
++            for (int n = 0; n < dim / 8; ++n) {
++                a.partial[prow * dim + 8 * n + sub] = output[m][n];
++            }
++            if (sub == 0) {
++                a.partial[total_rows * dim + 2 * prow]     = maxima[q_idx];
++                a.partial[total_rows * dim + 2 * prow + 1] = denom[q_idx];
++            }
++        }
++        return;
++    }
++
++    __syncthreads();
++#    pragma unroll
++    for (int m = 0; m < kQTiles; ++m) {
++        const int q_idx = m * 16 + row_local;
++        if (q_idx >= Q) { continue; }
++        const int t_row  = q_idx / group;
++        const int head   = kv_head * group + (q_idx % group);
++        const float sink =
++            a.sinks != nullptr ? a.sinks[std::int64_t(t_row) * a.sink_stride + head] : -INFINITY;
++        const float top = fmaxf(maxima[q_idx], sink);
++        const float w   = isfinite(maxima[q_idx]) ? expf(maxima[q_idx] - top) : 0.0f;
++        const float inv = 1.0f / (denom[q_idx] * w + (isfinite(sink) ? expf(sink - top) : 0.0f));
++#    pragma unroll
++        for (int n = 0; n < dim / 8; ++n) {
++            const int channel = 8 * n + sub;
++            const float gate =
++                a.gate ? sigmoidf(a.gate[std::int64_t(t_row) * a.gate_stride + head * dim + channel])
++                       : 1.0f;
++            tile[q_idx][channel] = output[m][n] * w * inv * gate;
++        }
++    }
++    __syncthreads();
++    const int width = a.query_heads * dim;
++    for (int q_idx = warp; q_idx < Q; q_idx += 4) {
++        const int t_row = q_idx / group;
++        const int head  = kv_head * group + (q_idx % group);
++        const auto value = *reinterpret_cast<const float4*>(&tile[q_idx][4 * lane]);
++        if (a.out_q.qs)
++            store_q8x4(a.out_q, width, t_row, head * (dim / 4) + lane, value, true);
++        else
++            store_bf16x4(a.out + std::int64_t(t_row) * width + head * dim + 4 * lane, value);
++    }
++#endif
++}
++
+ template <int kRows>
+ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(AttentionArgs a) {
+     constexpr int kWarps = kRows == 1 ? 4 : 8;
+@@ -933,7 +1210,7 @@ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(Atten
      int lo = 0, hi = 0;
      key_range(a, t0, t1, lo, hi);
      const int keys   = hi + 1 - lo;
@@ -703,7 +1101,7 @@ index e6099ea..bcd1af7 100644
      const int split  = int(blockIdx.z);
      if (split >= active) { return; }
      const int chunk = ((keys + active - 1) / active + kTile - 1) / kTile * kTile;
-@@ -980,11 +1023,24 @@ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(Atten
+@@ -980,11 +1257,24 @@ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(Atten
              const int rest   = w % (kTile * (kD / 8));
              const int r = rest / (kD / 8), c = rest % (kD / 8);
              uint4 word = make_uint4(0, 0, 0, 0);
@@ -730,7 +1128,7 @@ index e6099ea..bcd1af7 100644
              }
              *reinterpret_cast<uint4*>(matrix == 0 ? &k_s[r][c * 8] : &v_s[r][c * 8]) = word;
          }
-@@ -1078,6 +1134,162 @@ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(Atten
+@@ -1078,6 +1368,162 @@ __global__ void __launch_bounds__(kRows == 1 ? 128 : 256) attention_kernel(Atten
      }
  }
  
@@ -893,7 +1291,7 @@ index e6099ea..bcd1af7 100644
  // Block (head, row): merges the splits of one query head and its sink, thread d the output's
  // dimension d. Every split counts with weight exp(m_s - M), the sink as a key without a value:
  // M = max(max_s m_s, sink), l = sum_s l_s exp(m_s - M) + exp(sink - M).
-@@ -1089,7 +1301,7 @@ __global__ void attention_combine_kernel(AttentionArgs a) {
+@@ -1089,7 +1535,7 @@ __global__ void attention_combine_kernel(AttentionArgs a) {
      const std::int64_t rows  = std::int64_t(a.rows.tokens) * a.query_heads * a.splits;
      const std::int64_t first = (std::int64_t(t) * a.query_heads + head) * a.splits;
      int lo = 0, hi = 0;
@@ -902,7 +1300,48 @@ index e6099ea..bcd1af7 100644
      const int active = active_splits(hi + 1 - lo, a.splits);
      __shared__ float weight[kCombineThreads];
      __shared__ float max_s, inv_l;
-@@ -1795,6 +2007,7 @@ __device__ Pick block_pick(Pick p) {
+@@ -1489,17 +1935,35 @@ __global__ void spark_rotate_kernel(SparkRotateArgs a) {
+     float sn = 0.0f, cs = 0.0f;
+     sincosf(float(angle), &sn, &cs);
+     const float out = d < kD / 2 ? y[d] * cs - y[d + kD / 2] * sn : y[d] * cs + y[d - kD / 2] * sn;
+-    if (a.k_cache == nullptr) {
++    if (a.k_cache == nullptr && a.k_plane.coding == KvCoding::F16) {
+         row[h * kD + d] = out;
+         return;
+     }
+     const int sequence = row_sequence(a.rows, t);
+     const int position = physical(a.rows, t);
+     const int slot     = a.ring != 0 ? position % a.ring : position;
+-    const std::int64_t at = std::int64_t(sequence) * a.seq_stride + std::int64_t(h) * a.head_stride +
+-                            std::int64_t(slot) * kD + d;
+-    a.k_cache[at] = __float2half(out);
+-    a.v_cache[at] = __float2half(row[(a.heads + h) * kD + d]);
++    if (a.k_plane.coding == KvCoding::Mxfp8) {
++        const float kx = out;
++        const float vx = row[(a.heads + h) * kD + d];
++        const unsigned ke = kv::mxfp8_exponent(ops::warp_max(fabsf(kx), 0xffffffffu));
++        const unsigned ve = kv::mxfp8_exponent(ops::warp_max(fabsf(vx), 0xffffffffu));
++        const KvPlaneView& kp = a.k_plane;
++        const KvPlaneView& vp = a.v_plane;
++        const std::int64_t r  = std::int64_t(slot);
++        kp.codes[sequence * kp.code_seq + h * kp.code_head + r * kp.code_row + d] = kv::mxfp8_code(kx, ke);
++        vp.codes[sequence * vp.code_seq + h * vp.code_head + r * vp.code_row + d] = kv::mxfp8_code(vx, ve);
++        if ((d & 31) == 0) {
++            kp.scales[sequence * kp.scale_seq + h * kp.scale_head + r * kp.scale_row + d / 32] =
++                std::uint8_t(ke);
++            vp.scales[sequence * vp.scale_seq + h * vp.scale_head + r * vp.scale_row + d / 32] =
++                std::uint8_t(ve);
++        }
++    } else {
++        const std::int64_t at = std::int64_t(sequence) * a.seq_stride +
++                                std::int64_t(h) * a.head_stride + std::int64_t(slot) * kD + d;
++        a.k_cache[at] = __float2half(out);
++        a.v_cache[at] = __float2half(row[(a.heads + h) * kD + d]);
++    }
+ }
+ 
+ __global__ void add_rows_kernel(float* h, const float* y, std::int64_t y_stride, int hidden,
+@@ -1795,6 +2259,7 @@ __device__ Pick block_pick(Pick p) {
  __device__ float scaled_logit(float x, float temp) { return isfinite(x) ? x / temp : -INFINITY; }
  
  __global__ void residual_masses(const __nv_bfloat16* target, const float* proposal, int stride,
@@ -910,7 +1349,7 @@ index e6099ea..bcd1af7 100644
                                  int nv, int k, float temperature, float4* tiles) {
      const int col = blockIdx.y, t = blockIdx.x;
      Pick p, q;
-@@ -1803,8 +2016,11 @@ __global__ void residual_masses(const __nv_bfloat16* target, const float* propos
+@@ -1803,8 +2268,11 @@ __global__ void residual_masses(const __nv_bfloat16* target, const float* propos
              scaled_logit(__bfloat162float(target[std::int64_t(col) * stride + i]), temperature);
          if (isfinite(x)) p = merge_pick(p, {x, i, 1.f});
          if (col < k) {
@@ -924,7 +1363,7 @@ index e6099ea..bcd1af7 100644
          }
      }
      p = block_pick(p);
-@@ -1823,6 +2039,7 @@ __global__ void residual_normalize(const float4* tiles, float2* totals) {
+@@ -1823,6 +2291,7 @@ __global__ void residual_normalize(const float4* tiles, float2* totals) {
  }
  
  __global__ void residual_race(const __nv_bfloat16* target, const float* proposal, int stride,
@@ -932,7 +1371,7 @@ index e6099ea..bcd1af7 100644
                                int nv, int k, const float2* totals, int start,
                                ops::SamplingConfig cfg, const int* drafts, Winner* wins,
                                int* accept) {
-@@ -1836,8 +2053,12 @@ __global__ void residual_race(const __nv_bfloat16* target, const float* proposal
+@@ -1836,8 +2305,12 @@ __global__ void residual_race(const __nv_bfloat16* target, const float* proposal
          if (!isfinite(lp)) continue;
          float lr = lp;
          if (col < k) {
@@ -947,7 +1386,7 @@ index e6099ea..bcd1af7 100644
              if (i == drafts[col]) {
                  float u     = ops::sampling_uniform(cfg.seed, start + col, 702, 0);
                  accept[col] = lp >= lq || logf(u + 0.5f / 16777216.0f) < lp - lq;
-@@ -1870,9 +2091,10 @@ __global__ void __launch_bounds__(256) spark_pick_partials_kernel(SparkStepArgs
+@@ -1870,9 +2343,10 @@ __global__ void __launch_bounds__(256) spark_pick_partials_kernel(SparkStepArgs
          const float raw = a.logits[v];
          const float x   = draw.temperature > 0 ? raw / draw.temperature : raw;
          if (draw.temperature > 0 && isfinite(raw)) {
@@ -959,7 +1398,7 @@ index e6099ea..bcd1af7 100644
                                   v});
          }
          if (x > p.top) {
-@@ -1916,8 +2138,9 @@ __global__ void __launch_bounds__(kSparkPartials) spark_pick_final_kernel(SparkS
+@@ -1916,8 +2390,9 @@ __global__ void __launch_bounds__(kSparkPartials) spark_pick_final_kernel(SparkS
          }
      }
      if (threadIdx.x == 0) {
@@ -971,13 +1410,43 @@ index e6099ea..bcd1af7 100644
          a.confidence[a.row - 1]   = 1.0f / p.sum;
      }
      for (int r = threadIdx.x; r < kSparkRank; r += blockDim.x) {
-@@ -2095,7 +2318,12 @@ void attention(const AttentionArgs& args, cudaStream_t stream) {
+@@ -2091,11 +2566,42 @@ void attention(const AttentionArgs& args, cudaStream_t stream) {
+     }
+     const int t = args.rows.tokens;
+     if (t <= 0) { return; }
++    const auto launch_verify_mma = [&](int q_total) {
++        const dim3 grid(1, args.kv_heads, args.splits);
++        const auto run = [&]<int kQTiles>() {
++            const KvCoding kc = args.k_plane.coding, vc = args.v_plane.coding;
++            if (kc == KvCoding::F16 && vc == KvCoding::F16) {
++                attention_verify_mma_kernel<kQTiles, KvCoding::F16, KvCoding::F16><<<grid, 128, 0, stream>>>(args);
++            } else if (kc == KvCoding::Mxfp8 && vc == KvCoding::Mxfp8) {
++                attention_verify_mma_kernel<kQTiles, KvCoding::Mxfp8, KvCoding::Mxfp8><<<grid, 128, 0, stream>>>(args);
++            } else if (kc == KvCoding::Int8G64 && vc == KvCoding::Int4G32) {
++                attention_verify_mma_kernel<kQTiles, KvCoding::Int8G64, KvCoding::Int4G32><<<grid, 128, 0, stream>>>(args);
++            } else {
++                attention_verify_mma_kernel<kQTiles, KvCoding::Fp8Row, KvCoding::Fp8Row><<<grid, 128, 0, stream>>>(args);
++            }
++        };
++        if (q_total <= 16) {
++            run.template operator()<1>();
++        } else {
++            run.template operator()<2>();
++        }
++    };
++    static const int verify_mma_mode = [] {
++        const char* v = std::getenv("INKLING_VERIFY_MMA");
++        return v ? std::atoi(v) : 0;
++    }();
+     if (args.uniform) {
          if (args.rows.chunk || t > 8 || (args.splits > 1 && args.partial == nullptr)) {
              throw std::invalid_argument("inkling2 attention: a uniform block of 1..8 decode rows");
          }
 -        attention_kernel<8><<<dim3(1, args.kv_heads, args.splits), 256, 0, stream>>>(args);
 +        static const bool fast_uniform = std::getenv("INKLING_SHARED_VERIFY_ATTN") != nullptr;
-+        if (fast_uniform && t * group <= 24) {
++        if (verify_mma_mode >= 1 && t * group <= 32) {
++            launch_verify_mma(t * group);
++        } else if (fast_uniform && t * group <= 24) {
 +            attention_verify_kernel<<<dim3(1, args.kv_heads, args.splits), t * group * 32, 0, stream>>>(args);
 +        } else {
 +            attention_kernel<8><<<dim3(1, args.kv_heads, args.splits), 256, 0, stream>>>(args);
@@ -985,7 +1454,27 @@ index e6099ea..bcd1af7 100644
          check_launch("attention");
          if (args.splits > 1) {
              attention_combine_kernel<<<dim3(args.query_heads, t, 1), kCombineThreads, 0, stream>>>(args);
-@@ -2116,6 +2344,18 @@ void attention(const AttentionArgs& args, cudaStream_t stream) {
+@@ -2107,8 +2613,17 @@ void attention(const AttentionArgs& args, cudaStream_t stream) {
+         if (args.splits != 1) { throw std::invalid_argument("inkling2 attention: chunk splits"); }
+         if (std::getenv("INKLING_MMA_PREFILL") && t >= 16 && args.rows.starts == nullptr &&
+             args.rows.sequences == nullptr) {
+-            prompt_attention_mma<<<dim3(blocks_for(t, 16), args.query_heads), 128, 0, stream>>>(
+-                args);
++            const dim3 grid(blocks_for(t, 16), args.query_heads);
++            const KvCoding kc = args.k_plane.coding, vc = args.v_plane.coding;
++            if (kc == KvCoding::F16 && vc == KvCoding::F16) {
++                prompt_attention_mma<KvCoding::F16, KvCoding::F16><<<grid, 128, 0, stream>>>(args);
++            } else if (kc == KvCoding::Mxfp8 && vc == KvCoding::Mxfp8) {
++                prompt_attention_mma<KvCoding::Mxfp8, KvCoding::Mxfp8><<<grid, 128, 0, stream>>>(args);
++            } else if (kc == KvCoding::Int8G64 && vc == KvCoding::Int4G32) {
++                prompt_attention_mma<KvCoding::Int8G64, KvCoding::Int4G32><<<grid, 128, 0, stream>>>(args);
++            } else {
++                prompt_attention_mma<KvCoding::Fp8Row, KvCoding::Fp8Row><<<grid, 128, 0, stream>>>(args);
++            }
+             check_launch("prompt_attention_mma");
+             return;
+         }
+@@ -2116,6 +2631,22 @@ void attention(const AttentionArgs& args, cudaStream_t stream) {
          check_launch("attention");
          return;
      }
@@ -993,7 +1482,11 @@ index e6099ea..bcd1af7 100644
 +        if (t > 8 || (args.splits > 1 && args.partial == nullptr)) {
 +            throw std::invalid_argument("inkling2 attention: shared_verify requires 1..8 rows");
 +        }
-+        attention_verify_kernel<<<dim3(1, args.kv_heads, args.splits), t * group * 32, 0, stream>>>(args);
++        if (verify_mma_mode >= 2) {
++            launch_verify_mma(t * group);
++        } else {
++            attention_verify_kernel<<<dim3(1, args.kv_heads, args.splits), t * group * 32, 0, stream>>>(args);
++        }
 +        check_launch("attention_shared_verify");
 +        if (args.splits > 1) {
 +            attention_combine_kernel<<<dim3(args.query_heads, t, 1), kCombineThreads, 0, stream>>>(args);
@@ -1004,7 +1497,7 @@ index e6099ea..bcd1af7 100644
      attention_kernel<1><<<dim3(t, args.kv_heads, args.splits), 128, 0, stream>>>(args);
      check_launch("attention");
      if (args.splits > 1) {
-@@ -2315,18 +2555,22 @@ void full_sample(const __nv_bfloat16* logits, int stride, int domain, int column
+@@ -2315,18 +2846,22 @@ void full_sample(const __nv_bfloat16* logits, int stride, int domain, int column
  
  void residual_sample(const __nv_bfloat16* target, const float* proposal, int stride, int domain,
                       int rows, int start, const int* drafts, const ops::SamplingConfig& config,
@@ -1032,7 +1525,7 @@ index e6099ea..bcd1af7 100644
      check_launch("Inkling maximal coupling");
  }
 diff --git a/src/models/inkling2/kernels.h b/src/models/inkling2/kernels.h
-index 101695d..d4c870c 100644
+index 101695d..86be27b 100644
 --- a/src/models/inkling2/kernels.h
 +++ b/src/models/inkling2/kernels.h
 @@ -25,6 +25,8 @@
@@ -1089,7 +1582,18 @@ index 101695d..d4c870c 100644
      float* partial = nullptr; // decode: attention_workspace_floats
      const float* gate = nullptr;
      std::int64_t gate_stride = 0;
-@@ -417,7 +437,8 @@ void full_sample(const __nv_bfloat16* logits, int stride, int domain, int column
+@@ -374,8 +394,9 @@ struct SparkRotateArgs {
+     int heads = 0, begin = 0, end = 0;
+     const float* norm = nullptr;
+     float eps = 1e-6f, theta = 10000.0f;
+-    __half* k_cache = nullptr; // null: queries
++    __half* k_cache = nullptr; // null: queries (when k_plane.coding == F16)
+     __half* v_cache = nullptr;
++    KvPlaneView k_plane, v_plane;
+     std::int64_t seq_stride = 0, head_stride = 0;
+     int ring = 0;
+ };
+@@ -417,7 +438,8 @@ void full_sample(const __nv_bfloat16* logits, int stride, int domain, int column
                   std::int32_t* tokens, cudaStream_t stream);
  void residual_sample(const __nv_bfloat16* target, const float* proposal, int stride, int domain,
                       int rows, int position, const int* drafts, const ops::SamplingConfig& config,
@@ -1099,7 +1603,7 @@ index 101695d..d4c870c 100644
  void commit_sampled(const std::int32_t* target, const std::int32_t* drafts, int extent,
                      std::int32_t* lengths, std::int32_t* anchors, std::int32_t* licensed,
                      std::int32_t* counts, std::int32_t* accepted, cudaStream_t stream);
-@@ -439,6 +460,7 @@ struct SparkStepArgs {
+@@ -439,6 +461,7 @@ struct SparkStepArgs {
      const __nv_bfloat16* m = nullptr;
      const float* c = nullptr;
      int vocab = 0, hidden_size = 0, row = 0;
@@ -2142,7 +2646,7 @@ index 6ed1bd3..7f53f8a 100644
          own_family_artifact(options.artifact_path)) {
          throw std::invalid_argument(
 diff --git a/src/runtime/engine/inkling2_core.cpp b/src/runtime/engine/inkling2_core.cpp
-index dd3c068..e7ccc3f 100644
+index dd3c068..84513f7 100644
 --- a/src/runtime/engine/inkling2_core.cpp
 +++ b/src/runtime/engine/inkling2_core.cpp
 @@ -12,6 +12,8 @@
@@ -2189,7 +2693,78 @@ index dd3c068..e7ccc3f 100644
                         double(instance->executor->memory().kv_bytes) / 1048576.0,
                         instance->executor->memory().kv_grows
                             ? " at most, growing with the sequences beside an elastic expert cache"
-@@ -2705,7 +2705,8 @@ struct Inkling2Core::Impl {
+@@ -455,34 +455,39 @@ static std::uint64_t image_key(const models::qwen3_5::VisionItem& item) {
+ }
+ 
+ struct WidthPolicy {
+-    static constexpr unsigned capacity = 4;
++    static constexpr unsigned capacity = 8;
+     std::array<unsigned, capacity> samples{};
+     std::array<double, capacity> seconds{};
+-    std::array<double, capacity> conditional{1.0, 0.5, 0.5, 0.5};
++    std::array<double, capacity> conditional{1.0, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25};
+     std::array<unsigned, capacity> evidence{};
+     unsigned rounds = 0;
+ 
+     unsigned select(unsigned maximum) const {
+         maximum = std::min(maximum, capacity - 1);
+-        for (unsigned w = 0; w <= maximum; ++w)
+-            if (samples[w] < 3) return w;
++        const unsigned base_max = std::min(maximum, 3U);
++        for (unsigned w = 0; w <= base_max; ++w)
++            if (samples[w] < 2) return w;
+         double chance = 1.0, length = 1.0;
+         unsigned best  = 0;
+         double fastest = 1.0 / seconds[0];
+         for (unsigned w = 1; w <= maximum; ++w) {
+             chance *= conditional[w];
+             length += chance;
++            if (samples[w] < 2) {
++                // Progressively unlock wide windows (4..7) only when narrower drafts are accepting well.
++                if (best + 1 >= w || conditional[w - 1] >= 0.42) return w;
++                break;
++            }
+             const double rate = length / seconds[w];
+             if (rate > fastest) {
+                 fastest = rate;
+                 best    = w;
+             }
+         }
+-        // Occasional wide rounds measure the later positions even when the shorter
+-        // width has been winning. A direct round refreshes the local cost as context grows.
+-        if (rounds % 31 == 0) return maximum;
++        // Occasional refresh probes catch prose->code phase shifts and growing-context KV cost.
+         if (rounds % 59 == 0) return 0;
+-        if (best == 0 && rounds % 9 == 0) return 1;
++        if (rounds % 31 == 0) return std::min(maximum, best + 1);
++        if (best == 0 && rounds % 9 == 0 && maximum >= 1) return 1;
+         return best;
+     }
+ 
+@@ -2316,8 +2321,10 @@ struct Inkling2Core::Impl {
+                                        : phase.sampling;
+             const bool custom    = sampling.top_k == 0 || sampling.top_k > 20;
+             const bool full = sampling.top_k == 0 && sampling.top_p == 1 && sampling.min_p == 0;
+-            if (choose_width && spark_drafts && full && decoding == 1 && !request->constrained &&
+-                !request->penalties && !phase.post_thinking_sampling && speculates(*request)) {
++            const bool greedy = sampling.temperature <= 0.0f || sampling.top_k == 1;
++            if (choose_width && spark_drafts && (full || greedy) && decoding == 1 &&
++                !request->constrained && !request->penalties && !phase.post_thinking_sampling &&
++                speculates(*request)) {
+                 width_request = request;
+                 baseline      = request->position;
+                 steps         = request->width_policy.select(std::min(steps, spark_drafts));
+@@ -2356,7 +2363,8 @@ struct Inkling2Core::Impl {
+         spark_round_width = 0;
+         if (!drafting.empty()) {
+             std::uint32_t width = steps;
+-            if (spark_controller && drafting.size() == 1 && batch.empty() && speculative.empty()) {
++            if (spark_controller && !width_request && drafting.size() == 1 && batch.empty() &&
++                speculative.empty()) {
+                 const Request& r     = *drafting.front();
+                 const auto budget    = r.output.model_token_budget_remaining(r.budget->remaining());
+                 const std::uint32_t room = static_cast<std::uint32_t>(std::min<std::uint64_t>(
+@@ -2705,7 +2713,8 @@ struct Inkling2Core::Impl {
              models::inkling2::kernels::residual_sample(
                  static_cast<const __nv_bfloat16*>(logits.data), proposal, logits.ne[0], domain,
                  verified_columns, batch[0]->position + 1, static_cast<const int*>(drafted.data),
